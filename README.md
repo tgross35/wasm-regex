@@ -8,6 +8,8 @@ First, if you don't already have it, install [wasm-pack](https://github.com/rust
 
 Next, inside the main folder, run `wasm-pack build`.
 
+To build an even smaller wasm file, use `wasm-pack build -t web --release --no-typescript --features none -Z build-std=panic_abort,std`
+
 Install the necessary packages with `npm install`.
 
 Finally, run `npm run serve` to get the site up and going locally.

@@ -2,13 +2,23 @@
 name = "wasm-regex"
 version = "0.1.0"
 authors = ["Jonathan Troyer <jonathantroyer@outlook.com>"]
-edition = "2018"
+edition = "2021"
 
 [lib]
 crate-type = ["cdylib"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+none = []
+
 [dependencies]
 wasm-bindgen = "0.2.70"
-regex = "1"
+regex = {default-features = false, features = ["unicode", "std"], version = "1"}
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
