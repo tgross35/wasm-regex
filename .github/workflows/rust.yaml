@@ -56,11 +56,20 @@ jobs:
       - run: rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-      - run: wasm-pack build -t web --release --no-typescript --features none -Z build-std=panic_abort,std
-      - name: Archive
+      - name: Default build
+        run: wasm-pack build
+      - run: mv pkg/ build-pkg
+      - name: Minified build
+        run: wasm-pack build -t web --release --no-typescript --features none -Z build-std=panic_abort,std
+      - name: Archive default build
         uses: actions/upload-artifact@v3
         with:
-          name: build
+          name: build-default
+          path: build-pkg/
+      - name: Archive minified build
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-minified
           path: pkg/
 
   fmt:
