@@ -1,7 +1,10 @@
 use regex::{Regex, RegexBuilder};
+// use serde::Serialize;
+use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
-/// Process default flags to create a usable regex
+/// Process specified flags to create a regex query
+/// Acceptable flags characters are `imsUux`
 fn re_build(reg_exp: &str, flags: &str) -> Regex {
     let mut builder = RegexBuilder::new(reg_exp);
     let mut tmp_build = &mut builder;
@@ -29,6 +32,29 @@ fn re_build(reg_exp: &str, flags: &str) -> Regex {
     tmp_build.build().expect("failed to build regex")
 }
 
+/// Representation of all matches in some text
+#[derive(Debug, Serialize)]
+struct MatchSer {
+    /// List of all matches
+    matches: Vec<Vec<Option<CapSer>>>,
+}
+
+/// Representation of a single capture group
+#[derive(Debug, Serialize)]
+struct CapSer {
+    /// Optional name of the capture group
+    name: Option<String>,
+    /// Whether or not this capture group represents the entire match (this will
+    /// be the first capture group within its list)
+    entire_match: bool,
+    /// Content of the capture group
+    content: String,
+    /// Start index in the original string
+    start: usize,
+    /// End index in the original string
+    end: usize,
+}
+
 /// Run a regular expression on a block of text, returning a JSON string
 ///
 /// # Arguments
@@ -37,59 +63,34 @@ fn re_build(reg_exp: &str, flags: &str) -> Regex {
 /// - `text`: haystack to search in
 /// - `reg_exp`: regular expression to match against
 ///
-/// Returns something like:
-///
-/// ```json5
-/// {
-///     "matches": [
-///         [
-///             {
-///                 "content": "match content",
-///                 "start": 10,
-///                 "end": 15
-///             }
-///             // ... further capturing groups within the match
-///         ]
-///         // Further matches within text
-///     ]
-/// }
-/// ```
+/// Returns a string JSON representation of `CapSer`
 #[wasm_bindgen]
 pub fn re_find(text: &str, reg_exp: &str, flags: &str) -> String {
-    let mut out = r#"{"matches":["#.to_owned();
+    let mut out = MatchSer {
+        matches: Vec::new(),
+    };
 
     let re = re_build(reg_exp, flags);
-    for match_cap in re.captures_iter(text) {
-        //
-        out.push('[');
 
-        for cap in match_cap.iter() {
-            // Single capture group within a match
-            out.push('{');
+    for match_caps in re.captures_iter(text) {
+        let mut match_vec: Vec<Option<CapSer>> = Vec::new();
 
-            if let Some(m) = cap {
-                let match_fmt = format!(
-                    "\"content\":\"{}\",\"start\":{},\"end\":{}",
-                    m.as_str(),
-                    m.start(),
-                    m.end()
-                );
-                out.push_str(&match_fmt);
-            } else {
-                out.push_str(r#""content":null,"start":null,"end":null"#);
-            }
+        for (i, opt_cap_name) in re.capture_names().enumerate() {
+            let match_ = match_caps.get(i).map(|m| CapSer {
+                name: opt_cap_name.map(|n| n.to_owned()),
+                entire_match: i == 0,
+                content: m.as_str().to_owned(),
+                start: m.start(),
+                end: m.end(),
+            });
 
-            out.push_str("},");
+            match_vec.push(match_);
         }
 
-        out.pop(); // remove final comma
-        out.push_str("],");
+        out.matches.push(match_vec);
     }
 
-    out.pop(); // remove final comma
-    out.push_str("]}");
-
-    out
+    serde_json::to_string(&out).expect("failed to serialize regex")
 }
 
 /// Perform a regex replacement on a provided string

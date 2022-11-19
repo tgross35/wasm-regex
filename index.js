@@ -5,12 +5,12 @@ async function initWasm() {
 initWasm();
 
 //Gets around an issue with Parcel
-window.reMatches = function reMatches() {
+window.reFind = function reFind() {
     let str = document.getElementById('str').value;
     let regExp = document.getElementById('regExp').value;
     let flags = document.getElementById('flags').value;
 
-    let output = wasmRegex.re_matches(str, regExp, flags);
+    let output = wasmRegex.re_find(str, regExp, flags);
     console.log(output);
 
     document.getElementById('output').innerText = output;
