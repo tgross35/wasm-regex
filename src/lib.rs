@@ -103,8 +103,9 @@ pub fn re_replace(text: &str, reg_exp: &str, rep: &str, flags: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wasm_bindgen_test::*;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn test_replace() {
         let res = re_replace("test 1234 end", r#"test (?P<cap>\d+)\s?"#, "$cap: ", "");
         assert_eq!(res, "1234: end");
