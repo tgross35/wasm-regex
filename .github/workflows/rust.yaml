@@ -60,8 +60,8 @@ jobs:
       - name: Archive
         uses: actions/upload-artifact@v3
         with:
-          name: wasm
-          path: pkg/*
+          name: build
+          path: pkg/
 
   fmt:
     name: "Format (cargo fmt)"
