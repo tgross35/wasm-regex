@@ -13,11 +13,22 @@
     </label>
     <br />
     <label>
-       RegExp
-       <input id="regExp" />
+        RegExp
+        <input id="regExp" />
     </label>
     <br />
-    <button onclick="findMatch()">Find match</button>
+    <label>
+        Flags
+        <input id="flags" />
+    </label>
+    <br />
+    <label>
+        Replace string
+        <input id="rep" />
+    </label>
+    <br />
+    <button onclick="reFind()">Find match</button>
+    <button onclick="reReplace()">Replace</button>
     <br />
     <span id="output"></span>
     <script src="./index.js"></script>
