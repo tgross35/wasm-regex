@@ -11,7 +11,7 @@ with `cargo install wasm-pack`.
 Next, inside the main folder, run `wasm-pack build`.
 
 To build an even smaller wasm file, use
-`wasm-pack build -t web --release --no-typescript --features none -Z build-std=panic_abort,std`
+`wasm-pack build -t web --release --no-typescript --features none -Z build-std=panic_abort,std -Z build-std-features=panic_immediate_abort`
 
 Install the necessary packages with `npm install`.
 
