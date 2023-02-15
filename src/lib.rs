@@ -1,5 +1,4 @@
 use regex::{Regex, RegexBuilder};
-// use serde::Serialize;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
@@ -65,7 +64,7 @@ struct CapSer {
 ///
 /// Returns a string JSON representation of `CapSer`
 #[wasm_bindgen]
-pub fn re_find(text: &str, reg_exp: &str, flags: &str) -> String {
+pub fn re_find(text: &str, reg_exp: &str, flags: &str) -> JsValue {
     let mut out = MatchSer {
         matches: Vec::new(),
     };
@@ -90,7 +89,8 @@ pub fn re_find(text: &str, reg_exp: &str, flags: &str) -> String {
         out.matches.push(match_vec);
     }
 
-    serde_json::to_string(&out).expect("failed to serialize regex")
+    // serde_json::to_string(&out).expect("failed to serialize regex")
+    serde_wasm_bindgen::to_value(&out).expect("failed to serialize regex")
 }
 
 /// Perform a regex replacement on a provided string

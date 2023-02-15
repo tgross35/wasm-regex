@@ -13,7 +13,7 @@ window.reFind = function reFind() {
     let output = wasmRegex.re_find(str, regExp, flags);
     console.log(output);
 
-    document.getElementById('output').innerText = output;
+    document.getElementById('output').innerText = JSON.stringify(output, null, 4);
 }
 
 window.reReplace = function reReplace() {
