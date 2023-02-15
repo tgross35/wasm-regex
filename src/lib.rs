@@ -12,20 +12,20 @@ fn re_build(reg_exp: &str, flags: &str) -> Regex {
         tmp_build = tmp_build.case_insensitive(true);
     }
     if flags.contains('m') {
-        tmp_build = tmp_build.multi_line(true)
+        tmp_build = tmp_build.multi_line(true);
     }
     if flags.contains('s') {
-        tmp_build = tmp_build.dot_matches_new_line(true)
+        tmp_build = tmp_build.dot_matches_new_line(true);
     }
     if flags.contains('U') {
-        tmp_build = tmp_build.swap_greed(true)
+        tmp_build = tmp_build.swap_greed(true);
     }
     if flags.contains('u') {
         // Unicode is enabled by default, `u` disables
-        tmp_build = tmp_build.unicode(false)
+        tmp_build = tmp_build.unicode(false);
     }
     if flags.contains('x') {
-        tmp_build = tmp_build.ignore_whitespace(true)
+        tmp_build = tmp_build.ignore_whitespace(true);
     }
 
     tmp_build.build().expect("failed to build regex")
@@ -67,7 +67,7 @@ struct CapSer<'a> {
 pub fn re_find(text: &str, reg_exp: &str, flags: &str) -> JsValue {
     let re = re_build(reg_exp, flags);
 
-    // Iterate all captures, 
+    // Iterate all captures,
     let matches: Vec<_> = re
         .captures_iter(text)
         .map(|match_caps| {
