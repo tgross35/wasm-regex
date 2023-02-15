@@ -33,21 +33,21 @@ fn re_build(reg_exp: &str, flags: &str) -> Regex {
 
 /// Representation of all matches in some text
 #[derive(Debug, Serialize)]
-struct MatchSer {
+struct MatchSer<'a> {
     /// List of all matches
-    matches: Vec<Vec<Option<CapSer>>>,
+    matches: Vec<Vec<Option<CapSer<'a>>>>,
 }
 
 /// Representation of a single capture group
 #[derive(Debug, Serialize)]
-struct CapSer {
+struct CapSer<'a> {
     /// Optional name of the capture group
-    name: Option<String>,
+    name: Option<&'a str>,
     /// Whether or not this capture group represents the entire match (this will
     /// be the first capture group within its list)
     entire_match: bool,
     /// Content of the capture group
-    content: String,
+    content: &'a str,
     /// Start index in the original string
     start: usize,
     /// End index in the original string
@@ -65,39 +65,40 @@ struct CapSer {
 /// Returns a string JSON representation of `CapSer`
 #[wasm_bindgen]
 pub fn re_find(text: &str, reg_exp: &str, flags: &str) -> JsValue {
-    let mut out = MatchSer {
-        matches: Vec::new(),
-    };
-
     let re = re_build(reg_exp, flags);
 
-    for match_caps in re.captures_iter(text) {
-        let mut match_vec: Vec<Option<CapSer>> = Vec::new();
+    // Iterate all captures, 
+    let matches: Vec<_> = re
+        .captures_iter(text)
+        .map(|match_caps| {
+            // For each capture name, get the correct capture and turn it into a
+            // serializable representation (CapSer). Collect it into a vector.
+            re.capture_names()
+                .enumerate()
+                .map(|(i, opt_cap_name)| {
+                    match_caps.get(i).map(|m| CapSer {
+                        name: opt_cap_name,
+                        entire_match: i == 0,
+                        content: m.as_str(),
+                        start: m.start(),
+                        end: m.end(),
+                    })
+                })
+                .collect::<Vec<Option<CapSer>>>()
+        })
+        .collect();
 
-        for (i, opt_cap_name) in re.capture_names().enumerate() {
-            let match_ = match_caps.get(i).map(|m| CapSer {
-                name: opt_cap_name.map(|n| n.to_owned()),
-                entire_match: i == 0,
-                content: m.as_str().to_owned(),
-                start: m.start(),
-                end: m.end(),
-            });
+    let out = MatchSer { matches };
 
-            match_vec.push(match_);
-        }
-
-        out.matches.push(match_vec);
-    }
-
-    // serde_json::to_string(&out).expect("failed to serialize regex")
     serde_wasm_bindgen::to_value(&out).expect("failed to serialize regex")
 }
 
 /// Perform a regex replacement on a provided string
 #[wasm_bindgen]
-pub fn re_replace(text: &str, reg_exp: &str, rep: &str, flags: &str) -> String {
+pub fn re_replace(text: &str, reg_exp: &str, rep: &str, flags: &str) -> JsValue {
     let re = re_build(reg_exp, flags);
-    re.replace(text, rep).to_string()
+    // Replace returns a Cow, get it as &str and turn into a js string
+    re.replace(text, rep).as_ref().into()
 }
 
 #[cfg(test)]
