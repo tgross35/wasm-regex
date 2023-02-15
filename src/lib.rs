@@ -66,27 +66,27 @@ struct CapSer<'a> {
 #[wasm_bindgen]
 pub fn re_find(text: &str, reg_exp: &str, flags: &str) -> JsValue {
     let re = re_build(reg_exp, flags);
+    let mut matches: Vec<Vec<Option<CapSer>>> = Vec::with_capacity(re.captures_len());
 
-    // Iterate all captures,
-    let matches: Vec<_> = re
-        .captures_iter(text)
-        .map(|match_caps| {
-            // For each capture name, get the correct capture and turn it into a
-            // serializable representation (CapSer). Collect it into a vector.
-            re.capture_names()
-                .enumerate()
-                .map(|(i, opt_cap_name)| {
-                    match_caps.get(i).map(|m| CapSer {
-                        name: opt_cap_name,
-                        entire_match: i == 0,
-                        content: m.as_str(),
-                        start: m.start(),
-                        end: m.end(),
-                    })
+    for match_caps in re.captures_iter(text) {
+        // For each capture name, get the correct capture and turn it into a
+        // serializable representation (CapSer). Collect it into a vector.
+        let match_: Vec<Option<CapSer>> = re
+            .capture_names()
+            .enumerate()
+            .map(|(i, opt_cap_name)| {
+                match_caps.get(i).map(|m| CapSer {
+                    name: opt_cap_name,
+                    entire_match: i == 0,
+                    content: m.as_str(),
+                    start: m.start(),
+                    end: m.end(),
                 })
-                .collect::<Vec<Option<CapSer>>>()
-        })
-        .collect();
+            })
+            .collect();
+
+        matches.push(match_);
+    }
 
     let out = MatchSer { matches };
 
