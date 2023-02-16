@@ -17,6 +17,7 @@ window.reFind = function reFind() {
 
     document.getElementById('output').innerText = JSON.stringify(output, null, 4);
     document.getElementById('find_time').innerText = end - start;
+    document.getElementById('input_len').innerText = str.length;
 }
 
 window.reReplace = function reReplace() {
@@ -31,4 +32,5 @@ window.reReplace = function reReplace() {
     
     document.getElementById('output').innerText = replaced;
     document.getElementById('replace_time').innerText = end - start;
+    document.getElementById('input_len').innerText = str.length;
 }
