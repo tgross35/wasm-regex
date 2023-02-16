@@ -2,33 +2,31 @@ use regex::{Regex, RegexBuilder};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
-/// Process specified flags to create a regex query
-/// Acceptable flags characters are `imsUux`
-fn re_build(reg_exp: &str, flags: &str) -> Regex {
+/// Process specified flags to create a regex query. Acceptable flags characters
+/// are `gimsUux`
+///
+/// The returned bool indicates if global
+fn re_build(reg_exp: &str, flags: &str) -> (Regex, bool) {
     let mut builder = RegexBuilder::new(reg_exp);
-    let mut tmp_build = &mut builder;
+    let mut builder_ref = &mut builder;
+    let mut global = false;
 
-    if flags.contains('i') {
-        tmp_build = tmp_build.case_insensitive(true);
-    }
-    if flags.contains('m') {
-        tmp_build = tmp_build.multi_line(true);
-    }
-    if flags.contains('s') {
-        tmp_build = tmp_build.dot_matches_new_line(true);
-    }
-    if flags.contains('U') {
-        tmp_build = tmp_build.swap_greed(true);
-    }
-    if flags.contains('u') {
-        // Unicode is enabled by default, `u` disables
-        tmp_build = tmp_build.unicode(false);
-    }
-    if flags.contains('x') {
-        tmp_build = tmp_build.ignore_whitespace(true);
+    for flag in flags.chars() {
+        match flag {
+            'g' => global = true,
+            'i' => builder_ref = builder_ref.case_insensitive(true),
+            'm' => builder_ref = builder_ref.multi_line(true),
+            's' => builder_ref = builder_ref.dot_matches_new_line(true),
+            'U' => builder_ref = builder_ref.swap_greed(true),
+            // Unicode is enabled by default, `u` disables
+            'u' => builder_ref = builder_ref.unicode(false),
+            'x' => builder_ref = builder_ref.ignore_whitespace(true),
+            _ => panic!("unrecognized flag"),
+        }
     }
 
-    tmp_build.build().expect("failed to build regex")
+    let re = builder_ref.build().expect("failed to build regex");
+    (re, global)
 }
 
 /// Representation of all matches in some text
@@ -65,17 +63,21 @@ struct CapSer<'a> {
 /// Returns a string JSON representation of `CapSer`
 #[wasm_bindgen]
 pub fn re_find(text: &str, reg_exp: &str, flags: &str) -> JsValue {
-    let re = re_build(reg_exp, flags);
+    let (re, global) = re_build(reg_exp, flags);
     let mut matches: Vec<Vec<Option<CapSer>>> = Vec::with_capacity(re.captures_len());
 
-    for match_caps in re.captures_iter(text) {
+    // If we aren't global, limit to the first match
+    let limit = if global { usize::MAX } else { 1 };
+
+    // Each item in this loop is a query match. Limit to `limit`.
+    for cap_match in re.captures_iter(text).take(limit) {
         // For each capture name, get the correct capture and turn it into a
         // serializable representation (CapSer). Collect it into a vector.
         let match_: Vec<Option<CapSer>> = re
             .capture_names()
             .enumerate()
             .map(|(i, opt_cap_name)| {
-                match_caps.get(i).map(|m| CapSer {
+                cap_match.get(i).map(|m| CapSer {
                     name: opt_cap_name,
                     entire_match: i == 0,
                     content: m.as_str(),
@@ -96,9 +98,13 @@ pub fn re_find(text: &str, reg_exp: &str, flags: &str) -> JsValue {
 /// Perform a regex replacement on a provided string
 #[wasm_bindgen]
 pub fn re_replace(text: &str, reg_exp: &str, rep: &str, flags: &str) -> JsValue {
-    let re = re_build(reg_exp, flags);
+    let (re, global) = re_build(reg_exp, flags);
     // Replace returns a Cow, get it as &str and turn into a js string
-    re.replace(text, rep).as_ref().into()
+    if global {
+        re.replace_all(text, rep).as_ref().into()
+    } else {
+        re.replace(text, rep).as_ref().into()
+    }
 }
 
 #[cfg(test)]
