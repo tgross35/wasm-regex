@@ -1,7 +1,13 @@
 [package]
 name = "wasm-regex"
 version = "0.1.0"
-authors = ["Jonathan Troyer <jonathantroyer@outlook.com>"]
+authors = [
+    "Jonathan Troyer <jonathantroyer@outlook.com>",
+    "Andrew Gallant <jamslam@gmail.com>",
+    "Maximilian Goisser <goisser94@gmail.com>",
+    "Firas Dib <firas.dib@gmail.com>",
+    "Trevor Gross <tmgross@umich.edu>"
+]
 edition = "2021"
 
 [lib]

@@ -4,7 +4,6 @@ async function initWasm() {
 }
 initWasm();
 
-//Gets around an issue with Parcel
 window.reFind = function reFind() {
     let str = document.getElementById('str').value;
     let regExp = document.getElementById('regExp').value;
