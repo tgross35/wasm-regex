@@ -31,11 +31,17 @@ serde-wasm-bindgen = "0.4"
 wasm-bindgen-test = "0.3.0"
 
 [profile.release]
-opt-level = "z"
+# enable "z" or "s" for smaller binaries, 3 for speed optimization
+opt-level = "s"
 lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
 
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = ["-Oz"]
+# Use -Oz for small size or -O3 for faster runtime
+wasm-opt = ["-O3"]
+
+[package.metadata.wasm-pack.profile.profiling]
+# Make sure the -O flag matches `.release` to avoid confusion
+wasm-opt = ['-O3', '-g']
