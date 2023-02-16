@@ -10,10 +10,13 @@ window.reFind = function reFind() {
     let regExp = document.getElementById('regExp').value;
     let flags = document.getElementById('flags').value;
 
+    let start = new Date().getTime();
     let output = wasmRegex.re_find(str, regExp, flags);
+    let end = new Date().getTime();
     console.log(output);
 
     document.getElementById('output').innerText = JSON.stringify(output, null, 4);
+    document.getElementById('find_time').innerText = end - start;
 }
 
 window.reReplace = function reReplace() {
@@ -22,7 +25,10 @@ window.reReplace = function reReplace() {
     let rep = document.getElementById('rep').value;
     let flags = document.getElementById('flags').value;
 
+    let start = new Date().getTime();
     let replaced = wasmRegex.re_replace(str, regExp, rep, flags);
+    let end = new Date().getTime();
     
     document.getElementById('output').innerText = replaced;
+    document.getElementById('replace_time').innerText = end - start;
 }
