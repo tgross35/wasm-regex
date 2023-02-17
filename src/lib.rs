@@ -25,9 +25,8 @@ struct CapSer<'a> {
     match_num: usize,
     /// Index of the group within this single match
     group_num: usize,
-    /// Whether or not this capture group represents the entire match (this will
-    /// be the first capture group within its list)
-    entire_match: bool,
+    /// Always true for Rust
+    is_participating: bool,
     /// Content of the capture group
     content: &'a str,
     /// Start index in the original string
@@ -48,6 +47,9 @@ fn re_build(reg_exp: &str, flags: &str) -> Result<(Regex, bool), Error> {
     let mut builder_ref = &mut builder;
     let mut global = false;
 
+    // Unicode is enabled by default, so we need to explicitly disable it
+    builder_ref.unicode(false);
+
     for flag in flags.chars() {
         match flag {
             'g' => global = true,
@@ -55,8 +57,7 @@ fn re_build(reg_exp: &str, flags: &str) -> Result<(Regex, bool), Error> {
             'm' => builder_ref = builder_ref.multi_line(true),
             's' => builder_ref = builder_ref.dot_matches_new_line(true),
             'U' => builder_ref = builder_ref.swap_greed(true),
-            // Unicode is enabled by default, `u` disables
-            'u' => builder_ref = builder_ref.unicode(false),
+            'u' => builder_ref = builder_ref.unicode(true),
             'x' => builder_ref = builder_ref.ignore_whitespace(true),
             // We can panic here because the UI should only ever give us valid
             // flags
@@ -97,7 +98,7 @@ fn re_find_impl(text: &str, reg_exp: &str, flags: &str) -> Result<JsValue, Error
                 group_name: opt_cap_name,
                 group_num: i,
                 match_num: match_idx,
-                entire_match: i == 0,
+                is_participating: true,
                 content: &text[m.start()..m.end()],
                 start: m.start(),
                 end: m.end(),
