@@ -1,5 +1,10 @@
-use regex::{Regex, RegexBuilder};
+//! Simple regex utility available via WASM
+
+mod error;
+use error::Error;
+use regex::bytes::{Regex, RegexBuilder};
 use serde::Serialize;
+use std::str;
 use wasm_bindgen::prelude::*;
 
 /// Representation of all matches in some text
@@ -31,12 +36,6 @@ struct CapSer<'a> {
     end: usize,
 }
 
-/// Wrapper so we can serialize regex errors
-#[derive(Debug, Serialize)]
-struct Error {
-    error: String,
-}
-
 /// Allow automatic conversion from error to a JS string with `?`
 impl From<Error> for JsValue {
     fn from(value: Error) -> Self {
@@ -49,6 +48,9 @@ impl From<Error> for JsValue {
 ///
 /// The returned bool indicates if global
 fn re_build(reg_exp: &str, flags: &str) -> Result<(Regex, bool), Error> {
+    // Validate the syntax is correct, error if not
+    let _ = regex_syntax::Parser::new().parse(reg_exp)?;
+
     let mut builder = RegexBuilder::new(reg_exp);
     let mut builder_ref = &mut builder;
     let mut global = false;
@@ -69,9 +71,7 @@ fn re_build(reg_exp: &str, flags: &str) -> Result<(Regex, bool), Error> {
 
     match builder.build() {
         Ok(re) => Ok((re, global)),
-        Err(e) => Err(Error {
-            error: e.to_string(),
-        }),
+        Err(e) => Err(e.into()),
     }
 }
 
@@ -84,61 +84,71 @@ fn re_build(reg_exp: &str, flags: &str) -> Result<(Regex, bool), Error> {
 /// - `reg_exp`: regular expression to match against
 ///
 /// Returns a string JSON representation of `CapSer`
-#[wasm_bindgen]
-pub fn re_find(text: &str, reg_exp: &str, flags: &str) -> JsValue {
-    let built_re = re_build(reg_exp, flags);
-    let Ok((re, global)) = built_re else {
-        // Handle error
-        return built_re.unwrap_err().into();
-    };
-    let default_cap = if global { re.captures_len() } else { 1 };
+fn re_find_impl(text: &str, reg_exp: &str, flags: &str) -> Result<JsValue, Error> {
+    let (re, global) = re_build(reg_exp, flags)?;
     let limit = if global { usize::MAX } else { 1 };
-    let mut matches: Vec<Vec<Option<CapSer>>> = Vec::with_capacity(default_cap);
+    let mut matches: Vec<Vec<Option<CapSer>>> = Vec::with_capacity(16);
 
     // If we aren't global, limit to the first match
 
     // Each item in this loop is a query match. Limit to `limit`.
-    for (match_idx, cap_match) in re.captures_iter(text).take(limit).enumerate() {
+    for (match_idx, cap_match) in re.captures_iter(text.as_bytes()).take(limit).enumerate() {
         // For each capture name, get the correct capture and turn it into a
         // serializable representation (CapSer). Collect it into a vector.
-        let match_: Vec<Option<CapSer>> = re
-            .capture_names()
-            .enumerate()
-            .map(|(i, opt_cap_name)| {
-                cap_match.get(i).map(|m| CapSer {
-                    group_name: opt_cap_name,
-                    group_num: i,
-                    match_num: match_idx,
-                    entire_match: i == 0,
-                    content: m.as_str(),
-                    start: m.start(),
-                    end: m.end(),
-                })
-            })
-            .collect();
+        let mut match_: Vec<Option<CapSer>> = Vec::with_capacity(re.captures_len());
+
+        for (i, opt_cap_name) in re.capture_names().enumerate() {
+            let to_push = cap_match.get(i).map(|m| CapSer {
+                group_name: opt_cap_name,
+                group_num: i,
+                match_num: match_idx,
+                entire_match: i == 0,
+                content: &text[m.start()..m.end()],
+                start: m.start(),
+                end: m.end(),
+            });
+
+            match_.push(to_push);
+        }
 
         matches.push(match_);
     }
 
-    let out = MatchSer { matches };
-
-    serde_wasm_bindgen::to_value(&out).expect("failed to serialize regex")
+    let res = MatchSer { matches };
+    Ok(serde_wasm_bindgen::to_value(&res).expect("failed to serialize result"))
 }
 
 /// Perform a regex replacement on a provided string
-#[wasm_bindgen]
-pub fn re_replace(text: &str, reg_exp: &str, rep: &str, flags: &str) -> JsValue {
-    let built_re = re_build(reg_exp, flags);
-    let Ok((re, global)) = built_re else {
-        return built_re.unwrap_err().into();
-    };
+fn re_replace_impl(text: &str, reg_exp: &str, rep: &str, flags: &str) -> Result<JsValue, Error> {
+    let (re, global) = re_build(reg_exp, flags)?;
 
     // Replace returns a Cow, get it as &str and turn into a js string
     if global {
-        re.replace_all(text, rep).as_ref().into()
+        Ok(str::from_utf8(re.replace_all(text.as_bytes(), rep.as_bytes()).as_ref())?.into())
     } else {
-        re.replace(text, rep).as_ref().into()
+        Ok(str::from_utf8(re.replace(text.as_bytes(), rep.as_bytes()).as_ref())?.into())
     }
+}
+
+/// Helper method to serialize our Result<...> type.
+fn convert_res_to_jsvalue(res: Result<JsValue, Error>) -> JsValue {
+    match res {
+        Ok(v) => v,
+        Err(e) => serde_wasm_bindgen::to_value(&e).expect("failed to serialize result"),
+    }
+}
+
+/// This is just a wrapper around `re_find_impl` that lets us use some nicer
+/// error handling
+#[wasm_bindgen]
+pub fn re_find(text: &str, reg_exp: &str, flags: &str) -> JsValue {
+    convert_res_to_jsvalue(re_find_impl(text, reg_exp, flags))
+}
+
+/// Wrapper for `re_replace_impl`
+#[wasm_bindgen]
+pub fn re_replace(text: &str, reg_exp: &str, rep: &str, flags: &str) -> JsValue {
+    convert_res_to_jsvalue(re_replace_impl(text, reg_exp, rep, flags))
 }
 
 #[cfg(test)]
