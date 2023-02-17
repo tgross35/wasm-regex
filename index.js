@@ -12,7 +12,6 @@ window.reFind = function reFind() {
     let start = new Date().getTime();
     let output = wasmRegex.re_find(str, regExp, flags);
     let end = new Date().getTime();
-    console.log(output);
 
     document.getElementById('output').innerText = JSON.stringify(output, null, 4);
     document.getElementById('find_time').innerText = end - start;

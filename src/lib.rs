@@ -20,11 +20,11 @@ struct MatchSer<'a> {
 struct CapSer<'a> {
     /// Optional name of the capture group
     group_name: Option<&'a str>,
-    /// Index of the group
-    group_num: usize,
-    /// Index of the match
+    /// Index of the match within all matches
     #[serde(rename = "match")]
     match_num: usize,
+    /// Index of the group within this single match
+    group_num: usize,
     /// Whether or not this capture group represents the entire match (this will
     /// be the first capture group within its list)
     entire_match: bool,
@@ -36,15 +36,8 @@ struct CapSer<'a> {
     end: usize,
 }
 
-/// Allow automatic conversion from error to a JS string with `?`
-impl From<Error> for JsValue {
-    fn from(value: Error) -> Self {
-        serde_wasm_bindgen::to_value(&value).expect("failed to serialize regex")
-    }
-}
-
 /// Process specified flags to create a regex query. Acceptable flags characters
-/// are `gimsUux`
+/// are `gimsUux`. Also validates the regex string
 ///
 /// The returned bool indicates if global
 fn re_build(reg_exp: &str, flags: &str) -> Result<(Regex, bool), Error> {
@@ -65,6 +58,8 @@ fn re_build(reg_exp: &str, flags: &str) -> Result<(Regex, bool), Error> {
             // Unicode is enabled by default, `u` disables
             'u' => builder_ref = builder_ref.unicode(false),
             'x' => builder_ref = builder_ref.ignore_whitespace(true),
+            // We can panic here because the UI should only ever give us valid
+            // flags
             _ => panic!("unrecognized flag"),
         }
     }
@@ -121,12 +116,14 @@ fn re_find_impl(text: &str, reg_exp: &str, flags: &str) -> Result<JsValue, Error
 /// Perform a regex replacement on a provided string
 fn re_replace_impl(text: &str, reg_exp: &str, rep: &str, flags: &str) -> Result<JsValue, Error> {
     let (re, global) = re_build(reg_exp, flags)?;
+    let text_bytes = text.as_bytes();
+    let rep_bytes = rep.as_bytes();
 
     // Replace returns a Cow, get it as &str and turn into a js string
     if global {
-        Ok(str::from_utf8(re.replace_all(text.as_bytes(), rep.as_bytes()).as_ref())?.into())
+        Ok(str::from_utf8(re.replace_all(text_bytes, rep_bytes).as_ref())?.into())
     } else {
-        Ok(str::from_utf8(re.replace(text.as_bytes(), rep.as_bytes()).as_ref())?.into())
+        Ok(str::from_utf8(re.replace(text_bytes, rep_bytes).as_ref())?.into())
     }
 }
 
@@ -138,8 +135,7 @@ fn convert_res_to_jsvalue(res: Result<JsValue, Error>) -> JsValue {
     }
 }
 
-/// This is just a wrapper around `re_find_impl` that lets us use some nicer
-/// error handling
+/// Wrapper for `re_find_impl`
 #[wasm_bindgen]
 pub fn re_find(text: &str, reg_exp: &str, flags: &str) -> JsValue {
     convert_res_to_jsvalue(re_find_impl(text, reg_exp, flags))

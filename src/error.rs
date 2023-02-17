@@ -9,7 +9,7 @@ use std::str;
 #[serde(tag = "error_type", content = "error")]
 pub enum Error {
     /// An error from regex
-    RegexSyntax(Box<ReSyntaxError>),
+    RegexSyntax(Box<ReSyntax>),
     /// Regex compiled larger than the limit (unlikely, unless we set a limit)
     RegexCompiledTooBig(String),
     /// Unspecified error (very unlikely)
@@ -47,34 +47,45 @@ impl From<std::str::Utf8Error> for Error {
     }
 }
 
-/// Serializable wrapper for a regex error
+/// Serializable wrapper for a regex syntax error
 ///
 /// Should represent both these types:
 /// - <https://docs.rs/regex-syntax/latest/regex_syntax/ast/struct.Error.html>
 /// - <https://docs.rs/regex-syntax/latest/regex_syntax/hir/struct.Error.html>
 #[derive(Default, Debug, Serialize)]
-pub struct ReSyntaxError {
+pub struct ReSyntax {
+    /// Debug representation of the syntax error type
     kind: String,
+    /// Display
+    message: String,
+    /// Pattern that caused the error
     pattern: String,
+    /// Location of the error
     span: Span,
-    aux_span: Option<Span>,
+    /// If applicable, second location of the error (e.g. for duplicates)
+    auxiliary_span: Option<Span>,
 }
 
-impl From<regex_syntax::Error> for ReSyntaxError {
+/// Convert regex syntax errors into our common error type
+impl From<regex_syntax::Error> for ReSyntax {
     fn from(value: regex_syntax::Error) -> Self {
         if let regex_syntax::Error::Parse(e) = value {
+            // AST error
             Self {
-                kind: e.kind().to_string(),
+                kind: format!("{:?}", e.kind()),
+                message: e.kind().to_string(),
                 pattern: e.pattern().to_owned(),
                 span: e.span().into(),
-                aux_span: e.auxiliary_span().map(|s| s.into()),
+                auxiliary_span: e.auxiliary_span().map(|s| s.into()),
             }
         } else if let regex_syntax::Error::Translate(e) = value {
+            // HIR error
             Self {
-                kind: e.kind().to_string(),
+                kind: format!("{:?}", e.kind()),
+                message: e.kind().to_string(),
                 pattern: e.pattern().to_owned(),
                 span: e.span().into(),
-                aux_span: None,
+                auxiliary_span: None,
             }
         } else {
             Self {
@@ -92,6 +103,7 @@ struct Span {
     end: Position,
 }
 
+/// Convert from regex span type to our serializable span
 impl From<&regex_syntax::ast::Span> for Span {
     fn from(value: &regex_syntax::ast::Span) -> Self {
         Self {
@@ -102,6 +114,8 @@ impl From<&regex_syntax::ast::Span> for Span {
 }
 
 /// Direct serializable map of `regex_syntax::ast::Position`
+/// 
+/// See: <https://docs.rs/regex-syntax/latest/regex_syntax/ast/struct.Position.html>
 #[derive(Default, Debug, Serialize)]
 struct Position {
     offset: usize,
@@ -109,6 +123,7 @@ struct Position {
     column: usize,
 }
 
+/// Convert from regex position type to our serializable position
 impl From<regex_syntax::ast::Position> for Position {
     fn from(value: regex_syntax::ast::Position) -> Self {
         Self {
