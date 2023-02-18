@@ -120,36 +120,36 @@ struct Position {
 /// Create our Span from a regex Span, converting utf8 indices to utf16
 fn make_span(s: &str, span: &ReSpan) -> Span {
     let RePosition {
-        offset: o8s,
-        line: l8s,
-        column: c8s,
+        offset: off8_start,
+        line: line8_start,
+        column: col8_start,
     } = span.start;
     let RePosition {
-        offset: o8e,
-        line: l8e,
-        column: c8e,
+        offset: off8_end,
+        line: line8_end,
+        column: col8_end,
     } = span.end;
 
-    let o16s = utf16_index_bytes(s, o8s);
-    let o16e = utf16_index_bytes(s, o8e);
+    let off16_start = utf16_index_bytes(s, off8_start);
+    let off16_end = utf16_index_bytes(s, off8_end);
 
     // Need to recalculate char offset within the line
-    let line_start = s.lines().nth(l8s - 1).unwrap();
-    let line_end = s.lines().nth(l8e - 1).unwrap();
+    let start_line = s.lines().nth(line8_start - 1).unwrap();
+    let end_line = s.lines().nth(line8_end - 1).unwrap();
 
-    let c16s = utf16_index_chars(line_start, c8s - 1) + 1;
-    let c16e = utf16_index_chars(line_end, c8e - 1) + 1;
+    let col16_start = utf16_index_chars(start_line, col8_start - 1) + 1;
+    let col16_end = utf16_index_chars(end_line, col8_end - 1) + 1;
 
     Span {
         start: Position {
-            offset: o16s,
-            line: l8s,
-            column: c16s,
+            offset: off16_start,
+            line: line8_start,
+            column: col16_start,
         },
         end: Position {
-            offset: o16e,
-            line: l8e,
-            column: c16e,
+            offset: off16_end,
+            line: line8_end,
+            column: col16_end,
         },
     }
 }

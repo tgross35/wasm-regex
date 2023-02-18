@@ -7,11 +7,49 @@ use serde::Serialize;
 use std::str;
 use wasm_bindgen::prelude::*;
 
+/// Quick macro to print to the console for debugging
+#[allow(unused_macros)]
+macro_rules! console {
+    ($($tt:tt)*) => {
+        crate::log(&format!($($tt)*))
+    };
+}
+
+#[cfg(not(test))]
+#[wasm_bindgen]
+extern "C" {
+    /// Log to the js console
+    #[wasm_bindgen(js_namespace = console)]
+    fn log(s: &str);
+}
+
+#[cfg(test)]
+fn log(s: &str) {
+    eprintln!("{s}");
+}
+
 /// Representation of all matches in some text
 #[derive(Debug, Serialize)]
 struct MatchSer<'a> {
     /// List of all matches. The inner vector is a list of all groups.
     matches: Vec<Vec<CapSer<'a>>>,
+}
+
+impl<'a> MatchSer<'a> {
+    /// For all matches, set indices to utf16 for the given text
+    fn update_indices_utf16(&mut self, text: &str, indices: &mut Vec<(usize, usize)>) {
+        // Get our indices from the text
+        utf16_index_bytes_slice(text, indices);
+
+        for cap_ser in self.matches.iter_mut().flatten() {
+            if let Some(s_ref) = cap_ser.start.as_mut() {
+                *s_ref = indices.iter().find(|(idxu8, _)| idxu8 == s_ref).unwrap().1;
+            }
+            if let Some(e_ref) = cap_ser.end.as_mut() {
+                *e_ref = indices.iter().find(|(idxu8, _)| idxu8 == e_ref).unwrap().1;
+            }
+        }
+    }
 }
 
 /// Representation of a single capture group
@@ -33,43 +71,102 @@ struct CapSer<'a> {
 
     /* below fields only exist if is_participating */
     /// Content of the capture group
-    content: Option<&'a str>,
+    content: Option<Content<'a>>,
     /// Start index in the original string
     start: Option<usize>,
     /// End index in the original string
     end: Option<usize>,
 }
 
+/// Our content is usually a string, but will be a byte slice if invalid utf8
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+enum Content<'a> {
+    String(&'a str),
+    Bytes(u8),
+}
+
+impl<'a> Content<'a> {
+    /// Return a sliced string if possible, byte array if not
+    fn from_slice(text: &'a str, start: usize, end: usize) -> Self {
+        if let Some(v) = text.get(start..end) {
+            Self::String(v)
+        } else {
+            let sliced = &text.as_bytes()[start..end];
+            // should only ever be used for single byte slices in non-unicode mode
+            debug_assert_eq!(sliced.len(), 1);
+            Self::Bytes(sliced[0])
+        }
+    }
+}
+
+///
+#[derive(Debug)]
+struct State {
+    re: Regex,
+    global: bool,
+    unicode: bool,
+}
+
 /// Process specified flags to create a regex query. Acceptable flags characters
 /// are `gimsUux`. Also validates the regex string
 ///
 /// The returned bool indicates if global
-fn re_build(reg_exp: &str, flags: &str) -> Result<(Regex, bool), Error> {
-    // Validate the syntax is correct, error if not
-    let _ = regex_syntax::Parser::new().parse(reg_exp)?;
-
+fn re_build(reg_exp: &str, flags: &str) -> Result<State, Error> {
+    // We keep a parser and builder separate; parser gives us nice errors,
+    // builder creates the regex we need.
+    let mut parser = regex_syntax::ParserBuilder::new();
     let mut builder = RegexBuilder::new(reg_exp);
-    let mut builder_ref = &mut builder;
+
+    // Default to non unicode
     let mut global = false;
+    let mut unicode = false;
+    parser.allow_invalid_utf8(true);
+    parser.unicode(false);
+    builder.unicode(false);
 
     for flag in flags.chars() {
+        // We need to apply all flags to both our builder and our parser
         match flag {
             'g' => global = true,
-            'i' => builder_ref = builder_ref.case_insensitive(true),
-            'm' => builder_ref = builder_ref.multi_line(true),
-            's' => builder_ref = builder_ref.dot_matches_new_line(true),
-            'U' => builder_ref = builder_ref.swap_greed(true),
-            // Unicode is enabled by default, `u` disables
-            'u' => builder_ref = builder_ref.unicode(false),
-            'x' => builder_ref = builder_ref.ignore_whitespace(true),
+            'i' => {
+                builder.case_insensitive(true);
+                parser.case_insensitive(true);
+            }
+            'm' => {
+                builder.multi_line(true);
+                parser.multi_line(true);
+            }
+            's' => {
+                builder.dot_matches_new_line(true);
+                parser.dot_matches_new_line(true);
+            }
+            'U' => {
+                builder.swap_greed(true);
+                parser.swap_greed(true);
+            }
+            'u' => {
+                builder.unicode(true);
+                parser.unicode(true);
+                unicode = true;
+            }
+            'x' => {
+                builder.ignore_whitespace(true);
+                parser.ignore_whitespace(true);
+            }
             // We can panic here because the UI should only ever give us valid
             // flags
             _ => panic!("unrecognized flag"),
         }
     }
 
+    let _ = parser.build().parse(reg_exp)?;
     match builder.build() {
-        Ok(re) => Ok((re, global)),
+        Ok(re) => Ok(State {
+            re,
+            global,
+            unicode,
+        }),
         Err(e) => Err(e.into()),
     }
 }
@@ -84,11 +181,18 @@ fn re_build(reg_exp: &str, flags: &str) -> Result<(Regex, bool), Error> {
 ///
 /// Returns a string JSON representation of `CapSer`
 fn re_find_impl(text: &str, reg_exp: &str, flags: &str) -> Result<JsValue, Error> {
-    let (re, global) = re_build(reg_exp, flags)?;
+    const MATCH_ESTIMATE: usize = 16; // estimate for vec size initialization
+    let State {
+        re,
+        global,
+        unicode,
+    } = re_build(reg_exp, flags)?;
 
     // If we aren't global, limit to the first match
     let limit = if global { usize::MAX } else { 1 };
-    let mut matches: Vec<Vec<CapSer>> = Vec::with_capacity(16);
+    let mut matches: Vec<Vec<CapSer>> = Vec::with_capacity(MATCH_ESTIMATE);
+    // We'll use this to convert our utf8 indices to utf16 in a more efficient way
+    let mut all_indices: Vec<(usize, usize)> = Vec::with_capacity(MATCH_ESTIMATE * 2);
 
     // Each item in this loop is a query match. Limit to `limit`.
     for (match_idx, cap_match) in re.captures_iter(text.as_bytes()).take(limit).enumerate() {
@@ -106,17 +210,14 @@ fn re_find_impl(text: &str, reg_exp: &str, flags: &str) -> Result<JsValue, Error
 
             // If our capture exists, update info for it
             if let Some(m) = cap_match.get(i) {
-                log(&format!(
-                    "text: {text:?}\nstart: {}, end: {}",
-                    m.start(),
-                    m.end()
-                ));
-                let content = &text[m.start()..m.end()];
+                let content = Content::from_slice(text, m.start(), m.end());
+                all_indices.push((m.start(), 0));
+                all_indices.push((m.end(), 0));
                 to_push.is_participating = true;
                 to_push.entire_match = i == 0;
                 to_push.content = Some(content);
-                to_push.start = Some(utf16_index_bytes(content, m.start()));
-                to_push.end = Some(utf16_index_bytes(content, m.end()));
+                to_push.start = Some(m.start());
+                to_push.end = Some(m.end());
             }
 
             match_.push(to_push);
@@ -125,13 +226,20 @@ fn re_find_impl(text: &str, reg_exp: &str, flags: &str) -> Result<JsValue, Error
         matches.push(match_);
     }
 
-    let res = MatchSer { matches };
+    let mut res = MatchSer { matches };
+    if unicode {
+        res.update_indices_utf16(text, &mut all_indices);
+    }
     Ok(serde_wasm_bindgen::to_value(&res).expect("failed to serialize result"))
 }
 
 /// Perform a regex replacement on a provided string
 fn re_replace_impl(text: &str, reg_exp: &str, rep: &str, flags: &str) -> Result<JsValue, Error> {
-    let (re, global) = re_build(reg_exp, flags)?;
+    let State {
+        re,
+        global,
+        unicode: _,
+    } = re_build(reg_exp, flags)?;
     let text_bytes = text.as_bytes();
     let rep_bytes = rep.as_bytes();
 
@@ -150,7 +258,11 @@ fn re_replace_list_impl(
     rep: &str,
     flags: &str,
 ) -> Result<JsValue, Error> {
-    let (re, global) = re_build(reg_exp, flags)?;
+    let State {
+        re,
+        global,
+        unicode: _,
+    } = re_build(reg_exp, flags)?;
     let limit = if global { usize::MAX } else { 1 };
     let mut dest: Vec<u8> = Vec::with_capacity(text.len());
 
@@ -160,38 +272,6 @@ fn re_replace_list_impl(
     }
 
     Ok(str::from_utf8(&dest)?.into())
-}
-
-/// Helper method to serialize our Result<...> type.
-fn convert_res_to_jsvalue(res: Result<JsValue, Error>) -> JsValue {
-    match res {
-        Ok(v) => v,
-        Err(e) => serde_wasm_bindgen::to_value(&e).expect("failed to serialize result"),
-    }
-}
-
-/// Convert a utf8 **byte** index to utf16. We could do this more efficiently in a
-/// batch probably, but it should be quick enough that we don't need to
-fn utf16_index_bytes(s: &str, i: usize) -> usize {
-    s[..i].chars().map(char::len_utf16).sum()
-}
-
-/// Take a utf8 **char** index and convert it to utf16
-fn utf16_index_chars(s: &str, i: usize) -> usize {
-    s.chars().take(i).map(char::len_utf16).sum()
-}
-
-/// For debug, initialize the panic handler to print panics to the console
-#[wasm_bindgen]
-pub fn debug_init() {
-    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-}
-
-#[wasm_bindgen]
-extern "C" {
-    /// Log to the js console
-    #[wasm_bindgen(js_namespace = console)]
-    fn log(s: &str);
 }
 
 /// Wrapper for `re_find_impl`
@@ -212,53 +292,62 @@ pub fn re_replace_list(text: &str, reg_exp: &str, rep: &str, flags: &str) -> JsV
     convert_res_to_jsvalue(re_replace_list_impl(text, reg_exp, rep, flags))
 }
 
-#[cfg(test)]
-mod tests {
-    // tests marked wasm_bindgen_test must be run with `wasm-pack test --node` (not `cargo test`)
-    use super::*;
-    use wasm_bindgen_test::*;
+/* helper functions */
 
-    #[test]
-    fn test_u16_index() {
-        let s8 = "x😀🤣a🤩😛🏴‍☠️🤑";
-        let s16: Vec<u16> = s8.encode_utf16().collect();
-
-        // start index (u8), end (u8), expected value
-        let to_test = [
-            (0, 1, "x"),
-            (1, 5, "😀"),
-            (5, 14, "🤣a🤩"),
-            (18, 31, "🏴‍☠️"),
-            (31, 35, "🤑"),
-        ];
-
-        for (start8, end8, r8) in to_test.iter().copied() {
-            let start16 = utf16_index_bytes(s8, start8);
-            let end16 = utf16_index_bytes(s8, end8);
-            let r16: Vec<u16> = r8.encode_utf16().collect();
-
-            assert_eq!(&s8[start8..end8], r8);
-            assert_eq!(&s16[start16..end16], r16);
-        }
-    }
-
-    // #[wasm_bindgen_test]
-    // fn test_find_unicode() {
-    //     let res = re_find("😃", ".", "");
-    //     // dbg!(&res);
-    //     assert_eq!(res, "1234: end");
-    //     assert_eq!(res.as_string().unwrap(), "1234: end");
-    // }
-
-    #[wasm_bindgen_test]
-    fn test_replace() {
-        let res = re_replace("test 1234 end", r#"test (?P<cap>\d+)\s?"#, "$cap: ", "");
-        assert_eq!(res.as_string().unwrap(), "1234: end");
-    }
-
-    #[wasm_bindgen_test]
-    fn test_replace_list() {
-        let res = re_replace_list("foo bar!", r#"\w+"#, "$0\n", "g");
-        assert_eq!(res.as_string().unwrap(), "foo\nbar\n");
+/// Helper method to serialize our Result<...> type.
+fn convert_res_to_jsvalue(res: Result<JsValue, Error>) -> JsValue {
+    match res {
+        Ok(v) => v,
+        Err(e) => serde_wasm_bindgen::to_value(&e).expect("failed to serialize result"),
     }
 }
+
+/// Convert a utf8 **byte** index to utf16
+fn utf16_index_bytes(s: &str, i: usize) -> usize {
+    s[..i].chars().map(char::len_utf16).sum()
+}
+
+/// Take an unsorted list of `(utf8_index, 0)` indices; sort them, update the second
+/// element in each to be the utf16 index
+///
+/// Panics if an index is outside of the string
+fn utf16_index_bytes_slice(s: &str, indices: &mut Vec<(usize, usize)>) {
+    // Sort by first element
+    indices.sort_by_key(|v| v.0);
+    indices.dedup();
+
+    // running total of the u16 string's length
+    let mut running_total = 0usize;
+    let mut iter = s
+        .char_indices()
+        .map(|(byte_idx, ch)| (byte_idx, ch.len_utf16()))
+        .map(|(byte_idx, ch_len)| {
+            let ret = (byte_idx, running_total);
+            running_total += ch_len;
+            ret
+        });
+
+    for (idxu8, idxu16) in indices.iter_mut() {
+        if *idxu8 == s.len() {
+            *idxu16 = running_total;
+            break;
+        }
+
+        let (_, u16_offset) = iter.find(|(byte_idx, _)| byte_idx == idxu8).unwrap();
+        *idxu16 = u16_offset;
+    }
+}
+
+/// Take a utf8 **char** index and convert it to utf16
+fn utf16_index_chars(s: &str, i: usize) -> usize {
+    s.chars().take(i).map(char::len_utf16).sum()
+}
+
+/// For debug, initialize the panic handler to print panics to the console
+#[wasm_bindgen]
+pub fn debug_init() {
+    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+}
+
+#[cfg(test)]
+mod tests;
