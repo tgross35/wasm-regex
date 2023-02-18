@@ -184,12 +184,19 @@ pub fn re_replace_list(text: &str, reg_exp: &str, rep: &str, flags: &str) -> JsV
 
 #[cfg(test)]
 mod tests {
+    // tests marked wasm_bindgen_test must be run with `wasm-pack test --node` (not `cargo test`)
     use super::*;
     use wasm_bindgen_test::*;
 
     #[wasm_bindgen_test]
     fn test_replace() {
         let res = re_replace("test 1234 end", r#"test (?P<cap>\d+)\s?"#, "$cap: ", "");
-        assert_eq!(res, "1234: end");
+        assert_eq!(res.as_string().unwrap(), "1234: end");
+    }
+
+    #[wasm_bindgen_test]
+    fn test_replace_list() {
+        let res = re_replace_list("foo bar!", r#"\w+"#, "$0\n", "g");
+        assert_eq!(res.as_string().unwrap(), "foo\nbar\n");
     }
 }
