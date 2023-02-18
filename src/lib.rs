@@ -239,6 +239,8 @@ fn re_find_impl(text: &str, reg_exp: &str, flags: &str) -> Result<JsValue, Error
 
     let mut res = MatchSer { matches };
 
+    // If we are matching on unicode, we need to update all byte indices to be
+    // utf16 indices
     if unicode {
         res.update_indices_utf16(text, all_indices);
     }
@@ -253,7 +255,7 @@ fn re_replace_impl(text: &str, reg_exp: &str, rep: &str, flags: &str) -> Result<
         global,
         unicode: _,
     } = re_build(reg_exp, flags)?;
-    
+
     let text_bytes = text.as_bytes();
     let rep_bytes = rep.as_bytes();
 
