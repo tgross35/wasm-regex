@@ -10,12 +10,12 @@ use wasm_bindgen::prelude::*;
 /// Representation of all matches in some text
 #[derive(Debug, Serialize)]
 struct MatchSer<'a> {
-    /// List of all matches
-    matches: Vec<Vec<Option<CapSer<'a>>>>,
+    /// List of all matches. The inner vector is a list of all groups.
+    matches: Vec<Vec<CapSer<'a>>>,
 }
 
 /// Representation of a single capture group
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Default)]
 #[serde(rename_all(serialize = "camelCase"))]
 struct CapSer<'a> {
     /// Optional name of the capture group
@@ -25,15 +25,19 @@ struct CapSer<'a> {
     match_num: usize,
     /// Index of the group within this single match
     group_num: usize,
+    /// Whether or not an optional group is found within the match
+    is_participating: bool,
     /// Whether or not this capture group represents the entire match (this will
     /// be the first capture group within its list)
     entire_match: bool,
+
+    /* below fields only exist if is_participating */
     /// Content of the capture group
-    content: &'a str,
+    content: Option<&'a str>,
     /// Start index in the original string
-    start: usize,
+    start: Option<usize>,
     /// End index in the original string
-    end: usize,
+    end: Option<usize>,
 }
 
 /// Process specified flags to create a regex query. Acceptable flags characters
@@ -84,24 +88,30 @@ fn re_find_impl(text: &str, reg_exp: &str, flags: &str) -> Result<JsValue, Error
 
     // If we aren't global, limit to the first match
     let limit = if global { usize::MAX } else { 1 };
-    let mut matches: Vec<Vec<Option<CapSer>>> = Vec::with_capacity(16);
+    let mut matches: Vec<Vec<CapSer>> = Vec::with_capacity(16);
 
     // Each item in this loop is a query match. Limit to `limit`.
     for (match_idx, cap_match) in re.captures_iter(text.as_bytes()).take(limit).enumerate() {
         // For each capture name, get the correct capture and turn it into a
         // serializable representation (CapSer). Collect it into a vector.
-        let mut match_: Vec<Option<CapSer>> = Vec::with_capacity(re.captures_len());
+        let mut match_: Vec<CapSer> = Vec::with_capacity(re.captures_len());
 
         for (i, opt_cap_name) in re.capture_names().enumerate() {
-            let to_push = cap_match.get(i).map(|m| CapSer {
+            let mut to_push = CapSer {
                 group_name: opt_cap_name,
                 group_num: i,
                 match_num: match_idx,
-                entire_match: i == 0,
-                content: &text[m.start()..m.end()],
-                start: m.start(),
-                end: m.end(),
-            });
+                ..CapSer::default()
+            };
+
+            // If our capture exists, update info for it
+            if let Some(m) = cap_match.get(i) {
+                to_push.is_participating = true;
+                to_push.entire_match = i == 0;
+                to_push.content = Some(&text[m.start()..m.end()]);
+                to_push.start = Some(m.start());
+                to_push.end = Some(m.end());
+            }
 
             match_.push(to_push);
         }

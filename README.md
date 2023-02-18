@@ -36,9 +36,14 @@ Result of `re_find`:
                 "groupName": "a",
                 // Index of the match
                 "match": 0,
+                // For optional capture groups, whether or 
+                "isParticipating": true,
                 // Whether or not this represents the entire match (true for
                 // groupNum 0)
                 "entireMatch": true,
+
+                /* the below fields only exist if isParticipating is true */
+
                 // Exact content of the match
                 "content": "ab",
                 // Start index of the match in UTF-8
