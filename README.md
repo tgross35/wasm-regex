@@ -16,3 +16,88 @@ To build an even smaller wasm file (for releases), use:
 Install the necessary packages with `npm install`.
 
 Finally, run `npm run serve` to get the site up and going locally.
+
+
+## API
+
+Result of `re_find`:
+
+```json5
+{
+    // This is the only key in the JSON. Each item in this array represents a
+    // single match
+    "matches": [ 
+        // Each item within this array represents a single group
+        [
+            {
+                // Index of the group
+                "groupNum": 0,
+                // Only present if the group is named
+                "groupName": "a",
+                // Index of the match
+                "match": 0,
+                // Whether or not this represents the entire match (true for
+                // groupNum 0)
+                "entireMatch": true,
+                // Exact content of the match
+                "content": "ab",
+                // Start index of the match in UTF-8
+                "start": 0,
+                // End index of the match in UTF-8
+                "end": 2
+            },
+        ],
+    ]
+}
+```
+
+Result of `re_replace` is just a string with all replacements applied.
+
+Result of `re_replace_list` is a string with replacements applied to each match,
+without any non-matching characters.
+
+### Error result
+
+Error results have two keys: `error_class` indicating the type of error, and
+`error` giving the contents.
+
+`regexSyntax` is the main error type, which is an error with the given syntax.
+
+```json5
+{
+    "error_class": "regexSyntax",
+    "error": {
+        // Identifier of the error kind from `regex_syntax`
+        "kind": "GroupUnopened",
+        // Message provided by parser about the error
+        "message": "unopened group",
+        // Offending pattern
+        "pattern": ")",
+        // Location of the error in the pattern
+        "span": {
+            "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+            },
+            "end": {
+                "offset": 1,
+                "line": 1,
+                "column": 2
+            }
+        }
+    }
+}
+```
+
+`regexCompiledTooBig` (exceeds compile size limit), `regexUnspecified`
+(unspecified error - never expected to happen), and `encoding` (something weird
+happened at a UTF-8 boundary) are the three remaining error types, and they are
+all pretty unlikely.
+
+```json5
+{
+    "error_class": "regexCompiledTooBig",
+    "error": "Compiled regex exceeds size limit of 0 bytes."
+}
+```

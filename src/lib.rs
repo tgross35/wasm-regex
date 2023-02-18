@@ -81,10 +81,10 @@ fn re_build(reg_exp: &str, flags: &str) -> Result<(Regex, bool), Error> {
 /// Returns a string JSON representation of `CapSer`
 fn re_find_impl(text: &str, reg_exp: &str, flags: &str) -> Result<JsValue, Error> {
     let (re, global) = re_build(reg_exp, flags)?;
-    let limit = if global { usize::MAX } else { 1 };
-    let mut matches: Vec<Vec<Option<CapSer>>> = Vec::with_capacity(16);
 
     // If we aren't global, limit to the first match
+    let limit = if global { usize::MAX } else { 1 };
+    let mut matches: Vec<Vec<Option<CapSer>>> = Vec::with_capacity(16);
 
     // Each item in this loop is a query match. Limit to `limit`.
     for (match_idx, cap_match) in re.captures_iter(text.as_bytes()).take(limit).enumerate() {
@@ -127,6 +127,25 @@ fn re_replace_impl(text: &str, reg_exp: &str, rep: &str, flags: &str) -> Result<
     }
 }
 
+/// Perform replacements and only return the matched string
+fn re_replace_list_impl(
+    text: &str,
+    reg_exp: &str,
+    rep: &str,
+    flags: &str,
+) -> Result<JsValue, Error> {
+    let (re, global) = re_build(reg_exp, flags)?;
+    let limit = if global { usize::MAX } else { 1 };
+    let mut dest: Vec<u8> = Vec::with_capacity(text.len());
+
+    // For each match, expand the replacement string and append it to our vector
+    for cap_match in re.captures_iter(text.as_bytes()).take(limit) {
+        cap_match.expand(rep.as_bytes(), &mut dest);
+    }
+
+    Ok(str::from_utf8(&dest)?.into())
+}
+
 /// Helper method to serialize our Result<...> type.
 fn convert_res_to_jsvalue(res: Result<JsValue, Error>) -> JsValue {
     match res {
@@ -145,6 +164,12 @@ pub fn re_find(text: &str, reg_exp: &str, flags: &str) -> JsValue {
 #[wasm_bindgen]
 pub fn re_replace(text: &str, reg_exp: &str, rep: &str, flags: &str) -> JsValue {
     convert_res_to_jsvalue(re_replace_impl(text, reg_exp, rep, flags))
+}
+
+/// Wrapper for `re_replace_list_impl`
+#[wasm_bindgen]
+pub fn re_replace_list(text: &str, reg_exp: &str, rep: &str, flags: &str) -> JsValue {
+    convert_res_to_jsvalue(re_replace_list_impl(text, reg_exp, rep, flags))
 }
 
 #[cfg(test)]

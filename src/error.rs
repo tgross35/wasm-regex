@@ -6,7 +6,7 @@ use std::str;
 /// Wrapper so we can serialize regex errors
 #[derive(Debug, Serialize)]
 #[serde(rename_all(serialize = "camelCase"))]
-#[serde(tag = "error_type", content = "error")]
+#[serde(tag = "error_class", content = "error")]
 pub enum Error {
     /// An error from regex
     RegexSyntax(Box<ReSyntax>),
@@ -114,7 +114,7 @@ impl From<&regex_syntax::ast::Span> for Span {
 }
 
 /// Direct serializable map of `regex_syntax::ast::Position`
-/// 
+///
 /// See: <https://docs.rs/regex-syntax/latest/regex_syntax/ast/struct.Position.html>
 #[derive(Default, Debug, Serialize)]
 struct Position {
