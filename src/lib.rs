@@ -39,13 +39,13 @@ struct MatchSer<'a> {
 
 impl<'a> MatchSer<'a> {
     /// For all matches, set indices to utf16 for the given text
-    fn update_indices_utf16(&mut self, text: &str, indices: &mut Vec<(usize, usize)>) {
+    fn update_indices_utf16(&mut self, text: &str, indices: Vec<usize>) {
         // Get our indices from the text
-        utf16_index_bytes_slice(text, indices);
+        let matched_indices = utf16_index_bytes_slice(text, indices);
 
         // convenience closure; find the correct element by binary search
         let find_idx = |search| {
-            indices[indices
+            matched_indices[matched_indices
                 .binary_search_by_key(&search, |(idxu8, _)| *idxu8)
                 .unwrap()]
             .1
@@ -203,7 +203,7 @@ fn re_find_impl(text: &str, reg_exp: &str, flags: &str) -> Result<JsValue, Error
     let limit = if global { usize::MAX } else { 1 };
     let mut matches: Vec<Vec<CapSer>> = Vec::with_capacity(MATCH_ESTIMATE);
     // We'll use this to convert our utf8 indices to utf16 in a more efficient way
-    let mut all_indices: Vec<(usize, usize)> = Vec::with_capacity(MATCH_ESTIMATE * 2);
+    let mut all_indices: Vec<usize> = Vec::with_capacity(MATCH_ESTIMATE * 2);
 
     // Each item in this loop is a query match. Limit to `limit`.
     for (match_idx, cap_match) in re.captures_iter(text.as_bytes()).take(limit).enumerate() {
@@ -222,8 +222,8 @@ fn re_find_impl(text: &str, reg_exp: &str, flags: &str) -> Result<JsValue, Error
             // If our capture exists, update info for it
             if let Some(m) = cap_match.get(i) {
                 let content = Content::from_slice(text, m.start(), m.end());
-                all_indices.push((m.start(), 0));
-                all_indices.push((m.end(), 0));
+                all_indices.push(m.start());
+                all_indices.push(m.end());
                 to_push.is_participating = true;
                 to_push.entire_match = i == 0;
                 to_push.content = Some(content);
@@ -238,9 +238,9 @@ fn re_find_impl(text: &str, reg_exp: &str, flags: &str) -> Result<JsValue, Error
     }
 
     let mut res = MatchSer { matches };
-    
+
     if unicode {
-        res.update_indices_utf16(text, &mut all_indices);
+        res.update_indices_utf16(text, all_indices);
     }
 
     Ok(serde_wasm_bindgen::to_value(&res).expect("failed to serialize result"))
@@ -253,6 +253,7 @@ fn re_replace_impl(text: &str, reg_exp: &str, rep: &str, flags: &str) -> Result<
         global,
         unicode: _,
     } = re_build(reg_exp, flags)?;
+    
     let text_bytes = text.as_bytes();
     let rep_bytes = rep.as_bytes();
 
@@ -276,6 +277,7 @@ fn re_replace_list_impl(
         global,
         unicode: _,
     } = re_build(reg_exp, flags)?;
+
     let limit = if global { usize::MAX } else { 1 };
     let mut dest: Vec<u8> = Vec::with_capacity(text.len());
 
@@ -324,10 +326,11 @@ fn utf16_index_bytes(s: &str, i: usize) -> usize {
 /// element in each to be the utf16 index
 ///
 /// Panics if an index is outside of the string
-fn utf16_index_bytes_slice(s: &str, indices: &mut Vec<(usize, usize)>) {
+fn utf16_index_bytes_slice(s: &str, mut indices: Vec<usize>) -> Vec<(usize, usize)> {
     // Sort by first element
-    indices.sort_by_key(|v| v.0);
+    indices.sort_unstable();
     indices.dedup();
+    let mut ret: Vec<(usize, usize)> = Vec::with_capacity(indices.len());
 
     // running total of the u16 string's length
     let mut running_total = 0usize;
@@ -340,15 +343,17 @@ fn utf16_index_bytes_slice(s: &str, indices: &mut Vec<(usize, usize)>) {
             ret
         });
 
-    for (idxu8, idxu16) in indices.iter_mut() {
-        if *idxu8 == s.len() {
-            *idxu16 = running_total;
+    for idxu8 in indices.iter().copied() {
+        if idxu8 == s.len() {
+            ret.push((idxu8, running_total));
             break;
         }
 
-        let (_, u16_offset) = iter.find(|(byte_idx, _)| byte_idx == idxu8).unwrap();
-        *idxu16 = u16_offset;
+        let (_, u16_offset) = iter.find(|(byte_idx, _)| *byte_idx == idxu8).unwrap();
+        ret.push((idxu8, u16_offset));
     }
+
+    ret
 }
 
 /// Take a utf8 **char** index and convert it to utf16

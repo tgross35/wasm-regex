@@ -41,16 +41,15 @@ fn test_u16_slice() {
         .copied()
         .map(|(_, e8, _, e16_ex, _)| (e8, e16_ex))
         .collect();
+
     expected_vec.append(&mut end_vec);
-    let mut input_vec = expected_vec.clone();
-    // reset result indicies to 0 to avoid cheating
-    input_vec.iter_mut().for_each(|(_, b)| *b = 0);
+    let input_vec: Vec<usize> = expected_vec.iter().map(|x| x.0).collect();
 
     expected_vec.sort_by_key(|v| v.0);
     expected_vec.dedup();
 
-    utf16_index_bytes_slice(TEST_S, &mut input_vec);
-    assert_eq!(expected_vec, input_vec);
+    let res = utf16_index_bytes_slice(TEST_S, input_vec);
+    assert_eq!(expected_vec, res);
 }
 
 // #[wasm_bindgen_test]
