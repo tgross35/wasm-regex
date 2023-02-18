@@ -6,7 +6,7 @@ use std::str;
 /// Wrapper so we can serialize regex errors
 #[derive(Debug, Serialize)]
 #[serde(rename_all(serialize = "camelCase"))]
-#[serde(tag = "error_class", content = "error")]
+#[serde(tag = "errorClass", content = "error")]
 pub enum Error {
     /// An error from regex
     RegexSyntax(Box<ReSyntax>),

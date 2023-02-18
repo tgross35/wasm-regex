@@ -70,7 +70,7 @@ Error results have two keys: `error_class` indicating the type of error, and
 
 ```json5
 {
-    "error_class": "regexSyntax",
+    "errorClass": "regexSyntax",
     "error": {
         // Identifier of the error kind from `regex_syntax`
         "kind": "GroupUnopened",
@@ -102,7 +102,7 @@ all pretty unlikely.
 
 ```json5
 {
-    "error_class": "regexCompiledTooBig",
+    "errorClass": "regexCompiledTooBig",
     "error": "Compiled regex exceeds size limit of 0 bytes."
 }
 ```
