@@ -20,6 +20,8 @@ Finally, run `npm run serve` to get the site up and going locally.
 
 ## API
 
+All indices are converted to their UTF16 equivalent.
+
 Result of `re_find`:
 
 ```json5

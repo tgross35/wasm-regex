@@ -1,5 +1,9 @@
 //! All the messy-ish error handling code
 
+use crate::utf16_index_bytes;
+use crate::utf16_index_chars;
+use regex_syntax::ast::Position as RePosition;
+use regex_syntax::ast::Span as ReSpan;
 use serde::Serialize;
 use std::str;
 
@@ -75,8 +79,8 @@ impl From<regex_syntax::Error> for ReSyntax {
                 kind: format!("{:?}", e.kind()),
                 message: e.kind().to_string(),
                 pattern: e.pattern().to_owned(),
-                span: e.span().into(),
-                auxiliary_span: e.auxiliary_span().map(|s| s.into()),
+                span: make_span(e.pattern(), e.span()),
+                auxiliary_span: e.auxiliary_span().map(|sp| make_span(e.pattern(), sp)),
             }
         } else if let regex_syntax::Error::Translate(e) = value {
             // HIR error
@@ -84,7 +88,7 @@ impl From<regex_syntax::Error> for ReSyntax {
                 kind: format!("{:?}", e.kind()),
                 message: e.kind().to_string(),
                 pattern: e.pattern().to_owned(),
-                span: e.span().into(),
+                span: make_span(e.pattern(), e.span()),
                 auxiliary_span: None,
             }
         } else {
@@ -103,16 +107,6 @@ struct Span {
     end: Position,
 }
 
-/// Convert from regex span type to our serializable span
-impl From<&regex_syntax::ast::Span> for Span {
-    fn from(value: &regex_syntax::ast::Span) -> Self {
-        Self {
-            start: value.start.into(),
-            end: value.end.into(),
-        }
-    }
-}
-
 /// Direct serializable map of `regex_syntax::ast::Position`
 ///
 /// See: <https://docs.rs/regex-syntax/latest/regex_syntax/ast/struct.Position.html>
@@ -123,13 +117,39 @@ struct Position {
     column: usize,
 }
 
-/// Convert from regex position type to our serializable position
-impl From<regex_syntax::ast::Position> for Position {
-    fn from(value: regex_syntax::ast::Position) -> Self {
-        Self {
-            offset: value.offset,
-            line: value.line,
-            column: value.column,
-        }
+/// Create our Span from a regex Span, converting utf8 indices to utf16
+fn make_span(s: &str, span: &ReSpan) -> Span {
+    let RePosition {
+        offset: o8s,
+        line: l8s,
+        column: c8s,
+    } = span.start;
+    let RePosition {
+        offset: o8e,
+        line: l8e,
+        column: c8e,
+    } = span.end;
+
+    let o16s = utf16_index_bytes(s, o8s);
+    let o16e = utf16_index_bytes(s, o8e);
+
+    // Need to recalculate char offset within the line
+    let line_start = s.lines().nth(l8s - 1).unwrap();
+    let line_end = s.lines().nth(l8e - 1).unwrap();
+
+    let c16s = utf16_index_chars(line_start, c8s - 1) + 1;
+    let c16e = utf16_index_chars(line_end, c8e - 1) + 1;
+
+    Span {
+        start: Position {
+            offset: o16s,
+            line: l8s,
+            column: c16s,
+        },
+        end: Position {
+            offset: o16e,
+            line: l8e,
+            column: c16e,
+        },
     }
 }

@@ -106,11 +106,17 @@ fn re_find_impl(text: &str, reg_exp: &str, flags: &str) -> Result<JsValue, Error
 
             // If our capture exists, update info for it
             if let Some(m) = cap_match.get(i) {
+                log(&format!(
+                    "text: {text:?}\nstart: {}, end: {}",
+                    m.start(),
+                    m.end()
+                ));
+                let content = &text[m.start()..m.end()];
                 to_push.is_participating = true;
                 to_push.entire_match = i == 0;
-                to_push.content = Some(&text[m.start()..m.end()]);
-                to_push.start = Some(m.start());
-                to_push.end = Some(m.end());
+                to_push.content = Some(content);
+                to_push.start = Some(utf16_index_bytes(content, m.start()));
+                to_push.end = Some(utf16_index_bytes(content, m.end()));
             }
 
             match_.push(to_push);
@@ -164,6 +170,30 @@ fn convert_res_to_jsvalue(res: Result<JsValue, Error>) -> JsValue {
     }
 }
 
+/// Convert a utf8 **byte** index to utf16. We could do this more efficiently in a
+/// batch probably, but it should be quick enough that we don't need to
+fn utf16_index_bytes(s: &str, i: usize) -> usize {
+    s[..i].chars().map(char::len_utf16).sum()
+}
+
+/// Take a utf8 **char** index and convert it to utf16
+fn utf16_index_chars(s: &str, i: usize) -> usize {
+    s.chars().take(i).map(char::len_utf16).sum()
+}
+
+/// For debug, initialize the panic handler to print panics to the console
+#[wasm_bindgen]
+pub fn debug_init() {
+    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+}
+
+#[wasm_bindgen]
+extern "C" {
+    /// Log to the js console
+    #[wasm_bindgen(js_namespace = console)]
+    fn log(s: &str);
+}
+
 /// Wrapper for `re_find_impl`
 #[wasm_bindgen]
 pub fn re_find(text: &str, reg_exp: &str, flags: &str) -> JsValue {
@@ -187,6 +217,38 @@ mod tests {
     // tests marked wasm_bindgen_test must be run with `wasm-pack test --node` (not `cargo test`)
     use super::*;
     use wasm_bindgen_test::*;
+
+    #[test]
+    fn test_u16_index() {
+        let s8 = "x😀🤣a🤩😛🏴‍☠️🤑";
+        let s16: Vec<u16> = s8.encode_utf16().collect();
+
+        // start index (u8), end (u8), expected value
+        let to_test = [
+            (0, 1, "x"),
+            (1, 5, "😀"),
+            (5, 14, "🤣a🤩"),
+            (18, 31, "🏴‍☠️"),
+            (31, 35, "🤑"),
+        ];
+
+        for (start8, end8, r8) in to_test.iter().copied() {
+            let start16 = utf16_index_bytes(s8, start8);
+            let end16 = utf16_index_bytes(s8, end8);
+            let r16: Vec<u16> = r8.encode_utf16().collect();
+
+            assert_eq!(&s8[start8..end8], r8);
+            assert_eq!(&s16[start16..end16], r16);
+        }
+    }
+
+    // #[wasm_bindgen_test]
+    // fn test_find_unicode() {
+    //     let res = re_find("😃", ".", "");
+    //     // dbg!(&res);
+    //     assert_eq!(res, "1234: end");
+    //     assert_eq!(res.as_string().unwrap(), "1234: end");
+    // }
 
     #[wasm_bindgen_test]
     fn test_replace() {

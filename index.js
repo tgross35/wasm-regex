@@ -1,6 +1,7 @@
 let wasmRegex;
 async function initWasm() {
     wasmRegex = await import('./pkg');
+    wasmRegex.debug_init();
 }
 initWasm();
 
