@@ -23,6 +23,7 @@ extern "C" {
     fn log(s: &str);
 }
 
+/// For testing, override the wasm log and just use stderr
 #[cfg(test)]
 fn log(s: &str) {
     eprintln!("{s}");
@@ -30,6 +31,7 @@ fn log(s: &str) {
 
 /// Representation of all matches in some text
 #[derive(Debug, Serialize)]
+#[serde(rename_all(serialize = "camelCase"))]
 struct MatchSer<'a> {
     /// List of all matches. The inner vector is a list of all groups.
     matches: Vec<Vec<CapSer<'a>>>,
@@ -41,12 +43,20 @@ impl<'a> MatchSer<'a> {
         // Get our indices from the text
         utf16_index_bytes_slice(text, indices);
 
+        // convenience closure; find the correct element by binary search
+        let find_idx = |search| {
+            indices[indices
+                .binary_search_by_key(&search, |(idxu8, _)| *idxu8)
+                .unwrap()]
+            .1
+        };
+
         for cap_ser in self.matches.iter_mut().flatten() {
             if let Some(s_ref) = cap_ser.start.as_mut() {
-                *s_ref = indices.iter().find(|(idxu8, _)| idxu8 == s_ref).unwrap().1;
+                *s_ref = find_idx(*s_ref);
             }
             if let Some(e_ref) = cap_ser.end.as_mut() {
-                *e_ref = indices.iter().find(|(idxu8, _)| idxu8 == e_ref).unwrap().1;
+                *e_ref = find_idx(*e_ref);
             }
         }
     }
@@ -182,6 +192,7 @@ fn re_build(reg_exp: &str, flags: &str) -> Result<State, Error> {
 /// Returns a string JSON representation of `CapSer`
 fn re_find_impl(text: &str, reg_exp: &str, flags: &str) -> Result<JsValue, Error> {
     const MATCH_ESTIMATE: usize = 16; // estimate for vec size initialization
+
     let State {
         re,
         global,
@@ -227,9 +238,11 @@ fn re_find_impl(text: &str, reg_exp: &str, flags: &str) -> Result<JsValue, Error
     }
 
     let mut res = MatchSer { matches };
+    
     if unicode {
         res.update_indices_utf16(text, &mut all_indices);
     }
+
     Ok(serde_wasm_bindgen::to_value(&res).expect("failed to serialize result"))
 }
 
