@@ -120,7 +120,7 @@ impl<'a> Content<'a> {
     }
 }
 
-///
+/// Our regex state with compiled regex and global flag
 #[derive(Debug)]
 struct State {
     re: Regex,
@@ -130,8 +130,8 @@ struct State {
 /// Process specified flags to create a regex query. Acceptable flags characters
 /// are `gimsUux`. Also validates the regex string.
 ///
-/// If the regex expression is empty, returns `None` for the state for short
-/// circuiting
+/// If the regex expression is empty, returns `None` for the state, allowing for
+/// short circuiting
 fn re_build(reg_exp: &str, flags: &str) -> Result<Option<State>, Error> {
     if reg_exp.is_empty() {
         return Ok(None);
@@ -142,7 +142,7 @@ fn re_build(reg_exp: &str, flags: &str) -> Result<Option<State>, Error> {
     let mut parser = regex_syntax::ParserBuilder::new();
     let mut builder = RegexBuilder::new(reg_exp);
 
-    // Default to non unicode
+    // Default to non-unicode, non-global
     let mut global = false;
     parser.allow_invalid_utf8(true);
     parser.unicode(false);
@@ -182,7 +182,10 @@ fn re_build(reg_exp: &str, flags: &str) -> Result<Option<State>, Error> {
         }
     }
 
+    // Create nice errors
     let _ = parser.build().parse(reg_exp)?;
+    
+    // Build our pattern
     match builder.build() {
         Ok(re) => Ok(Some(State { re, global })),
         Err(e) => Err(e.into()),
@@ -193,7 +196,7 @@ fn re_build(reg_exp: &str, flags: &str) -> Result<Option<State>, Error> {
 ///
 /// # Arguments
 ///
-/// - `flags`: apply global flags, options `imsUux`
+/// - `flags`: apply global flags, options `gimsUux`
 /// - `text`: haystack to search in
 /// - `reg_exp`: regular expression to match against
 ///
@@ -211,7 +214,7 @@ fn re_find_impl(text: &str, reg_exp: &str, flags: &str) -> Result<JsValue, Error
     // If we aren't global, limit to the first match
     let limit = if global { usize::MAX } else { 1 };
     let mut matches: Vec<Vec<CapSer>> = Vec::with_capacity(MATCH_ESTIMATE);
-    // We'll use this to convert our utf8 indices to utf16 in a more efficient way
+    // We'll use this to convert our utf8 indices to utf16 all at once
     let mut all_indices: Vec<usize> = Vec::with_capacity(MATCH_ESTIMATE * 2);
 
     // Each item in this loop is a query match. Limit to `limit`.
@@ -221,6 +224,7 @@ fn re_find_impl(text: &str, reg_exp: &str, flags: &str) -> Result<JsValue, Error
         let mut match_: Vec<CapSer> = Vec::with_capacity(re.captures_len());
 
         for (i, opt_cap_name) in re.capture_names().enumerate() {
+            // Start with a default capture representation
             let mut to_push = CapSer {
                 group_name: opt_cap_name,
                 group_num: i,
@@ -231,8 +235,10 @@ fn re_find_impl(text: &str, reg_exp: &str, flags: &str) -> Result<JsValue, Error
             // If our capture exists, update info for it
             if let Some(m) = cap_match.get(i) {
                 let content = Content::from_slice(text, m.start(), m.end());
+                
                 all_indices.push(m.start());
                 all_indices.push(m.end());
+                
                 to_push.is_participating = true;
                 to_push.entire_match = i == 0;
                 to_push.content = Some(content);
@@ -248,11 +254,8 @@ fn re_find_impl(text: &str, reg_exp: &str, flags: &str) -> Result<JsValue, Error
 
     let mut res = MatchSer { matches };
 
-    // If we are matching on unicode, we need to update all byte indices to be
-    // utf16 indices
-    // if unicode {
+    // We need to add valid utf16 indices, for js highlighting
     res.update_indices_utf16(text, all_indices);
-    // }
 
     Ok(res.to_js_value())
 }
@@ -330,13 +333,19 @@ fn convert_res_to_jsvalue(res: Result<JsValue, Error>) -> JsValue {
     }
 }
 
-/// Convert a utf8 **byte** index to utf16
+/// Convert a single utf8 **byte** index to utf16
 fn utf16_index_bytes(s: &str, i: usize) -> usize {
     s[..i].chars().map(char::len_utf16).sum()
 }
 
-/// Take an unsorted list of `utf8_index` indices; sort them, update, and return
-/// a map with the second element in each as the utf16 index
+/// Take a single utf8 **char** index and convert it to utf16
+fn utf16_index_chars(s: &str, i: usize) -> usize {
+    s.chars().take(i).map(char::len_utf16).sum()
+}
+
+
+/// Take an unsorted list of utf8 indices; sort them, update, and return a
+/// map of `utf8_index->utf16_index`
 ///
 /// Panics if an index is outside of the string
 fn utf16_index_bytes_slice(s: &str, mut indices: Vec<usize>) -> Vec<(usize, usize)> {
@@ -360,7 +369,7 @@ fn utf16_index_bytes_slice(s: &str, mut indices: Vec<usize>) -> Vec<(usize, usiz
         });
 
     // If we find a match that's not exact (for non-utf8 matches), save it for
-    // reuse
+    // reuse here
     let mut residual_match: Option<(usize, usize)> = None;
 
     // Iterate through every index we need matched
@@ -409,12 +418,8 @@ fn utf16_index_bytes_slice(s: &str, mut indices: Vec<usize>) -> Vec<(usize, usiz
     ret
 }
 
-/// Take a utf8 **char** index and convert it to utf16
-fn utf16_index_chars(s: &str, i: usize) -> usize {
-    s.chars().take(i).map(char::len_utf16).sum()
-}
-
-/// For debug, initialize the panic handler to print panics to the console
+/// For debugging, call this initialize the panic handler to print panics to
+/// the console
 #[wasm_bindgen]
 pub fn debug_init() {
     std::panic::set_hook(Box::new(console_error_panic_hook::hook));
