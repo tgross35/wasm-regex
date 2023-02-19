@@ -58,11 +58,11 @@ impl<'a> MatchSer<'a> {
         };
 
         for cap_ser in self.matches.iter_mut().flatten() {
-            if let Some(start) = cap_ser.start_utf8 {
-                cap_ser.start = Some(find_idx(start));
+            if let Some(start) = cap_ser.start {
+                cap_ser.start_utf16 = Some(find_idx(start));
             }
-            if let Some(end) = cap_ser.end_utf8 {
-                cap_ser.end = Some(find_idx(end));
+            if let Some(end) = cap_ser.end {
+                cap_ser.end_utf16 = Some(find_idx(end));
             }
         }
     }
@@ -89,13 +89,13 @@ struct CapSer<'a> {
     /// Content of the capture group
     content: Option<Content<'a>>,
     /// Start index in the original string
-    start: Option<usize>,
+    start_utf16: Option<usize>,
     /// Start index as a utf8 array
-    start_utf8: Option<usize>,
+    start: Option<usize>,
     /// End index in the original string
-    end: Option<usize>,
+    end_utf16: Option<usize>,
     /// End index as a utf8 array
-    end_utf8: Option<usize>,
+    end: Option<usize>,
 }
 
 /// Our content is usually a string, but will be a byte slice if invalid utf8
@@ -236,8 +236,8 @@ fn re_find_impl(text: &str, reg_exp: &str, flags: &str) -> Result<JsValue, Error
                 to_push.is_participating = true;
                 to_push.entire_match = i == 0;
                 to_push.content = Some(content);
-                to_push.start_utf8 = Some(m.start());
-                to_push.end_utf8 = Some(m.end());
+                to_push.start = Some(m.start());
+                to_push.end = Some(m.end());
             }
 
             match_.push(to_push);

@@ -46,12 +46,16 @@ Result of `re_find`:
 
                 /* the below fields only exist if isParticipating is true */
 
-                // Exact content of the match
+                // Exact content of the match. If the unicode flag (`u`) is not present
+                // and the match contains an invalid unicode char, this will be a
+                // number instead (number of that byte in the utf8 match)
                 "content": "ab",
-                // Start index of the match in UTF-8
+                // Position of the match in UTF-8. Use for user-displayed offsets
                 "start": 0,
-                // End index of the match in UTF-8
-                "end": 2
+                "end": 2,
+                // Position of the match in UTF-16. Use for highlighting in JS
+                "startUtf16": 0,
+                "endUtf16": 2,
             },
         ],
     ]
@@ -80,8 +84,22 @@ Error results have two keys: `error_class` indicating the type of error, and
         "message": "unopened group",
         // Offending pattern
         "pattern": ")",
-        // Location of the error in the pattern
+        // Location of the error in the pattern in utf8, this is just for
+        // debugging purposes
         "span": {
+            "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+            },
+            "end": {
+                "offset": 1,
+                "line": 1,
+                "column": 2
+            }
+        },
+        // Use this span to indicate position on the JS side
+        "span_utf16": {
             "start": {
                 "offset": 0,
                 "line": 1,

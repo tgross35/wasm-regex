@@ -2,7 +2,6 @@
 
 use crate::utf16_index_bytes;
 use crate::utf16_index_chars;
-use regex_syntax::ast::Position as RePosition;
 use regex_syntax::ast::Span as ReSpan;
 use serde::Serialize;
 use std::str;
@@ -66,30 +65,44 @@ pub struct ReSyntax {
     pattern: String,
     /// Location of the error
     span: Span,
+    /// Location of the error with js offsets
+    span_utf16: Span,
     /// If applicable, second location of the error (e.g. for duplicates)
     auxiliary_span: Option<Span>,
+    /// Auxiliary span with js offsets
+    auxiliary_span_utf16: Option<Span>,
 }
 
 /// Convert regex syntax errors into our common error type
 impl From<regex_syntax::Error> for ReSyntax {
     fn from(value: regex_syntax::Error) -> Self {
         if let regex_syntax::Error::Parse(e) = value {
+            let (span_u8, span_u16) = make_spans(e.pattern(), e.span());
+            let (aux_span_u8, aux_span_u16) = e
+                .auxiliary_span()
+                .map(|sp| make_spans(e.pattern(), sp))
+                .unzip();
             // AST error
             Self {
                 kind: format!("{:?}", e.kind()),
                 message: e.kind().to_string(),
                 pattern: e.pattern().to_owned(),
-                span: make_span(e.pattern(), e.span()),
-                auxiliary_span: e.auxiliary_span().map(|sp| make_span(e.pattern(), sp)),
+                span: span_u8,
+                span_utf16: span_u16,
+                auxiliary_span: aux_span_u8,
+                auxiliary_span_utf16: aux_span_u16,
             }
         } else if let regex_syntax::Error::Translate(e) = value {
+            let (span_u8, span_u16) = make_spans(e.pattern(), e.span());
             // HIR error
             Self {
                 kind: format!("{:?}", e.kind()),
                 message: e.kind().to_string(),
                 pattern: e.pattern().to_owned(),
-                span: make_span(e.pattern(), e.span()),
+                span: span_u8,
+                span_utf16: span_u16,
                 auxiliary_span: None,
+                auxiliary_span_utf16: None,
             }
         } else {
             Self {
@@ -117,39 +130,42 @@ struct Position {
     column: usize,
 }
 
-/// Create our Span from a regex Span, converting utf8 indices to utf16
-fn make_span(s: &str, span: &ReSpan) -> Span {
-    let RePosition {
-        offset: off8_start,
-        line: line8_start,
-        column: col8_start,
-    } = span.start;
-    let RePosition {
-        offset: off8_end,
-        line: line8_end,
-        column: col8_end,
-    } = span.end;
-
-    let off16_start = utf16_index_bytes(s, off8_start);
-    let off16_end = utf16_index_bytes(s, off8_end);
+/// Creates a utf8 span and a utf16 span
+fn make_spans(s: &str, span: &ReSpan) -> (Span, Span) {
+    let off16_start = utf16_index_bytes(s, span.start.offset);
+    let off16_end = utf16_index_bytes(s, span.end.offset);
 
     // Need to recalculate char offset within the line
-    let start_line = s.lines().nth(line8_start - 1).unwrap();
-    let end_line = s.lines().nth(line8_end - 1).unwrap();
+    let start_line = s.lines().nth(span.start.line - 1).unwrap();
+    let end_line = s.lines().nth(span.end.line - 1).unwrap();
 
-    let col16_start = utf16_index_chars(start_line, col8_start - 1) + 1;
-    let col16_end = utf16_index_chars(end_line, col8_end - 1) + 1;
+    let col16_start = utf16_index_chars(start_line, span.start.column - 1) + 1;
+    let col16_end = utf16_index_chars(end_line, span.end.column - 1) + 1;
 
-    Span {
+    let span_u8 = Span {
+        start: Position {
+            offset: span.start.offset,
+            line: span.start.line,
+            column: span.start.column,
+        },
+        end: Position {
+            offset: span.end.offset,
+            line: span.end.line,
+            column: span.end.column,
+        },
+    };
+    let span_u16 = Span {
         start: Position {
             offset: off16_start,
-            line: line8_start,
+            line: span.start.line,
             column: col16_start,
         },
         end: Position {
             offset: off16_end,
-            line: line8_end,
+            line: span.end.line,
             column: col16_end,
         },
-    }
+    };
+
+    (span_u8, span_u16)
 }
