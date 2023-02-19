@@ -184,7 +184,7 @@ fn re_build(reg_exp: &str, flags: &str) -> Result<Option<State>, Error> {
 
     // Create nice errors
     let _ = parser.build().parse(reg_exp)?;
-    
+
     // Build our pattern
     match builder.build() {
         Ok(re) => Ok(Some(State { re, global })),
@@ -235,10 +235,10 @@ fn re_find_impl(text: &str, reg_exp: &str, flags: &str) -> Result<JsValue, Error
             // If our capture exists, update info for it
             if let Some(m) = cap_match.get(i) {
                 let content = Content::from_slice(text, m.start(), m.end());
-                
+
                 all_indices.push(m.start());
                 all_indices.push(m.end());
-                
+
                 to_push.is_participating = true;
                 to_push.entire_match = i == 0;
                 to_push.content = Some(content);
@@ -342,7 +342,6 @@ fn utf16_index_bytes(s: &str, i: usize) -> usize {
 fn utf16_index_chars(s: &str, i: usize) -> usize {
     s.chars().take(i).map(char::len_utf16).sum()
 }
-
 
 /// Take an unsorted list of utf8 indices; sort them, update, and return a
 /// map of `utf8_index->utf16_index`
