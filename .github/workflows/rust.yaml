@@ -58,7 +58,9 @@ jobs:
         run: |
           brotli default-build-pkg/wasm_regex_bg.wasm
           brotli pkg/wasm_regex_bg.wasm
+          echo "Default build output:"
           ls -l default-build-pkg/
+          echo "Minified build output:"
           ls -l pkg/
       - name: Archive default build
         uses: actions/upload-artifact@v3
