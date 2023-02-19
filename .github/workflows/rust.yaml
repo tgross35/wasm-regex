@@ -51,14 +51,20 @@ jobs:
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
       - name: Default build
         run: wasm-pack build
-      - run: mv pkg/ build-pkg
+      - run: mv pkg/ default-build-pkg
       - name: Minified build
         run: wasm-pack build -t web --release --no-typescript --features none -Z build-std=panic_abort,std -Z build-std-features=panic_immediate_abort
+      - name: Print build size stats
+        run: |
+          brotli default-build-pkg/wasm_regex_bg.wasm
+          brotli pkg/wasm_regex_bg.wasm
+          ls -l default-build-pkg/
+          ls -l pkg/
       - name: Archive default build
         uses: actions/upload-artifact@v3
         with:
           name: build-default
-          path: build-pkg/
+          path: default-build-pkg/
       - name: Archive minified build
         uses: actions/upload-artifact@v3
         with:
