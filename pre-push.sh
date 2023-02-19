@@ -2,4 +2,4 @@
 
 echo "Running pre-push hook"
 cargo clippy
-cargo fmt
+cargo fmt --check

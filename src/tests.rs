@@ -52,6 +52,44 @@ fn test_u16_slice() {
     assert_eq!(expected_vec, res);
 }
 
+// Test on non-utf8 boundaries
+#[test]
+fn test_u16_slice_nonutf8_endemoji() {
+    let s = "xx😀";
+    let input: Vec<usize> = (0..=s.len()).collect();
+    let expected = vec![(0, 0), (1, 1), (2, 2), (3, 4), (4, 4), (5, 4), (6, 4)];
+    let res = utf16_index_bytes_slice(s, input);
+    assert_eq!(expected, res);
+}
+
+#[test]
+fn test_u16_slice_nonutf8_enchar() {
+    let s = "xx😀xx";
+    let input: Vec<usize> = (0..=s.len()).collect();
+    let expected = vec![
+        (0, 0),
+        (1, 1),
+        (2, 2),
+        (3, 4),
+        (4, 4),
+        (5, 4),
+        (6, 4),
+        (7, 5),
+        (8, 6),
+    ];
+    let res = utf16_index_bytes_slice(s, input);
+    assert_eq!(expected, res);
+}
+
+#[test]
+fn test_u16_slice_nonutf8_startemoji() {
+    let s = "😀xx";
+    let input: Vec<usize> = (0..=s.len()).collect();
+    let expected = vec![(0, 0), (1, 2), (2, 2), (3, 2), (4, 2), (5, 3), (6, 4)];
+    let res = utf16_index_bytes_slice(s, input);
+    assert_eq!(expected, res);
+}
+
 // #[wasm_bindgen_test]
 // fn test_find_unicode() {
 //     let res = re_find("😃", ".", "");
