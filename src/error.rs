@@ -10,6 +10,7 @@ use std::str;
 #[derive(Debug, Serialize)]
 #[serde(rename_all(serialize = "camelCase"))]
 #[serde(tag = "errorClass", content = "error")]
+#[allow(clippy::enum_variant_names)]
 pub enum Error {
     /// An error from regex
     RegexSyntax(Box<ReSyntax>),

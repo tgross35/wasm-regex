@@ -1,6 +1,8 @@
+use js_sys::JSON;
+use wasm_bindgen_test::*;
+
 // tests marked wasm_bindgen_test must be run with `wasm-pack test --node` (not `cargo test`)
 use super::*;
-use wasm_bindgen_test::*;
 
 /// UTF8 test string
 const TEST_S: &str = "x😀🤣a🤩😛🏴‍☠️🤑";
@@ -101,11 +103,21 @@ fn test_u16_slice_nonutf8_startemoji() {
 #[wasm_bindgen_test]
 fn test_replace() {
     let res = re_replace("test 1234 end", r#"test (?P<cap>\d+)\s?"#, "$cap: ", "");
-    assert_eq!(res.as_string().unwrap(), "1234: end");
+    let expected = ReplacdSer {
+        result: "1234: end",
+    }
+    .to_js_value();
+
+    assert_eq!(JSON::stringify(&res), JSON::stringify(&expected));
 }
 
 #[wasm_bindgen_test]
 fn test_replace_list() {
     let res = re_replace_list("foo bar!", r#"\w+"#, "$0\n", "g");
-    assert_eq!(res.as_string().unwrap(), "foo\nbar\n");
+    let expected = ReplacdSer {
+        result: "foo\nbar\n",
+    }
+    .to_js_value();
+
+    assert_eq!(JSON::stringify(&res), JSON::stringify(&expected));
 }
