@@ -68,6 +68,21 @@ impl<'a> MatchSer<'a> {
     }
 }
 
+/// Result of a replacement. The purpose of this struct is just to wrap the
+/// string within a "result" key for the JS result.
+#[derive(Debug, Serialize, Default)]
+#[serde(rename_all(serialize = "camelCase"))]
+struct ReplacdSer<'a> {
+    result: &'a str,
+}
+
+impl<'a> ReplacdSer<'a> {
+    /// Serialize myself
+    fn to_js_value(&self) -> JsValue {
+        serde_wasm_bindgen::to_value(self).expect("failed to serialize result")
+    }
+}
+
 /// Representation of a single capture group
 #[derive(Debug, Serialize, Default)]
 #[serde(rename_all(serialize = "camelCase"))]
@@ -272,12 +287,17 @@ fn re_replace_impl(text: &str, reg_exp: &str, rep: &str, flags: &str) -> Result<
     let text_bytes = text.as_bytes();
     let rep_bytes = rep.as_bytes();
 
-    // Replace returns a Cow, get it as &str and turn into a js string
-    if global {
-        Ok(str::from_utf8(re.replace_all(text_bytes, rep_bytes).as_ref())?.into())
+    let res_cow = if global {
+        re.replace_all(text_bytes, rep_bytes)
     } else {
-        Ok(str::from_utf8(re.replace(text_bytes, rep_bytes).as_ref())?.into())
-    }
+        re.replace(text_bytes, rep_bytes)
+    };
+
+    // Replace returns a Cow, get it as &str and turn into a js string
+    let rep_ser = ReplacdSer {
+        result: str::from_utf8(res_cow.as_ref())?,
+    };
+    Ok(rep_ser.to_js_value())
 }
 
 /// Perform replacements and only return the matched string
@@ -302,7 +322,11 @@ fn re_replace_list_impl(
         cap_match.expand(rep.as_bytes(), &mut dest);
     }
 
-    Ok(str::from_utf8(&dest)?.into())
+    let rep_ser = ReplacdSer {
+        result: str::from_utf8(&dest)?,
+    };
+
+    Ok(rep_ser.to_js_value())
 }
 
 /// Wrapper for `re_find_impl`
@@ -417,12 +441,18 @@ fn utf16_index_bytes_slice(s: &str, mut indices: Vec<usize>) -> Vec<(usize, usiz
     ret
 }
 
-/// For debugging, call this initialize the panic handler to print panics to
-/// the console
+/*
+
+// For debugging, enable this section and call `wasmRegex.debug_init();` on the
+// JS side
+
+/// Use the console as the panic handler
 #[wasm_bindgen]
 pub fn debug_init() {
     std::panic::set_hook(Box::new(console_error_panic_hook::hook));
 }
+
+*/
 
 #[cfg(test)]
 mod tests;

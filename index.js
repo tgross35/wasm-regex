@@ -1,7 +1,8 @@
 let wasmRegex;
 async function initWasm() {
     wasmRegex = await import('./pkg');
-    wasmRegex.debug_init();
+    // enable if the console handler is also enabled on the rust side
+    // wasmRegex.debug_init();
 }
 initWasm();
 
@@ -26,10 +27,10 @@ window.reReplace = function reReplace() {
     let flags = document.getElementById('flags').value;
 
     let start = new Date().getTime();
-    let replaced = wasmRegex.re_replace(str, regExp, rep, flags);
+    let output = wasmRegex.re_replace(str, regExp, rep, flags);
     let end = new Date().getTime();
     
-    document.getElementById('output').innerText = replaced;
+    document.getElementById('output').innerText = JSON.stringify(output, null, 4);
     document.getElementById('operation_time').innerText = end - start;
     document.getElementById('input_len').innerText = str.length;
 }
@@ -41,10 +42,10 @@ window.reReplaceList = function reReplace() {
     let flags = document.getElementById('flags').value;
 
     let start = new Date().getTime();
-    let replaced = wasmRegex.re_replace_list(str, regExp, rep, flags);
+    let output = wasmRegex.re_replace_list(str, regExp, rep, flags);
     let end = new Date().getTime();
     
-    document.getElementById('output').innerText = replaced;
+    document.getElementById('output').innerText = JSON.stringify(output, null, 4);
     document.getElementById('operation_time').innerText = end - start;
     document.getElementById('input_len').innerText = str.length;
 }

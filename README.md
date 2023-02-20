@@ -62,10 +62,11 @@ Result of `re_find`:
 }
 ```
 
-Result of `re_replace` is just a string with all replacements applied.
+Result of `re_replace` is just a string with all replacements applied. Result of
+`re_replace_list` is a string with replacements applied to each match, without
+any non-matching characters. Both use this schema:
 
-Result of `re_replace_list` is a string with replacements applied to each match,
-without any non-matching characters.
+
 
 ### Error result
 
@@ -73,6 +74,7 @@ Error results have two keys: `error_class` indicating the type of error, and
 `error` giving the contents.
 
 `regexSyntax` is the main error type, which is an error with the given syntax.
+It can be tested with something like the regex query `)`.
 
 ```json5
 {
@@ -126,3 +128,8 @@ all pretty unlikely.
     "error": "Compiled regex exceeds size limit of 0 bytes."
 }
 ```
+
+An `encoding` error can be tested with a multibyte character input (`😊`), no
+unicode flag, an expression that matches within character boundaries (`(.).`)
+and a replacement string that attempts to display part of the character code
+(`$1`).
