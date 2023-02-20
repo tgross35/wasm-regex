@@ -48,7 +48,7 @@ Result of `re_find`:
 
                 // Exact content of the match. If the unicode flag (`u`) is not present
                 // and the match contains an invalid unicode char, this will be a
-                // number instead (number of that byte in the utf8 match)
+                // byte slice instead (numbers of that byte in the utf8 match)
                 "content": "ab",
                 // Position of the match in UTF-8. Use for user-displayed offsets
                 "start": 0,
@@ -118,9 +118,8 @@ It can be tested with something like the regex query `)`.
 ```
 
 `regexCompiledTooBig` (exceeds compile size limit), `regexUnspecified`
-(unspecified error - never expected to happen), and `encoding` (something weird
-happened at a UTF-8 boundary) are the three remaining error types, and they are
-all pretty unlikely.
+(unspecified error - never expected to happen), are the two remaining error
+types, and they are should be pretty unlikely.
 
 ```json5
 {
@@ -129,7 +128,5 @@ all pretty unlikely.
 }
 ```
 
-An `encoding` error can be tested with a multibyte character input (`😊`), no
-unicode flag, an expression that matches within character boundaries (`(.).`)
-and a replacement string that attempts to display part of the character code
-(`$1`).
+(in a previous version, there was an `encoding` error, but now it just does a
+lossy UTF-8 encoding instead).

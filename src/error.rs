@@ -17,8 +17,6 @@ pub enum Error {
     RegexCompiledTooBig(String),
     /// Unspecified error (very unlikely)
     RegexUnspecified(String),
-    /// Some sort of invalid replacement
-    Encoding(String),
 }
 
 /// Add automatic conversion from regex error to our error type
@@ -39,14 +37,6 @@ impl From<regex::Error> for Error {
 impl From<regex_syntax::Error> for Error {
     fn from(value: regex_syntax::Error) -> Self {
         Self::RegexSyntax(Box::new(value.into()))
-    }
-}
-
-/// Automatic conversion from string utf8 error to our error type. If a result
-/// somehow returns non-valid UTF8/UTF16, this will fire
-impl From<std::str::Utf8Error> for Error {
-    fn from(value: str::Utf8Error) -> Self {
-        Self::Encoding(value.to_string())
     }
 }
 

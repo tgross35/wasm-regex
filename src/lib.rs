@@ -118,7 +118,7 @@ struct CapSer<'a> {
 #[serde(untagged)]
 enum Content<'a> {
     String(&'a str),
-    Bytes(u8),
+    Bytes(&'a [u8]),
 }
 
 impl<'a> Content<'a> {
@@ -128,9 +128,7 @@ impl<'a> Content<'a> {
             Self::String(v)
         } else {
             let sliced = &text.as_bytes()[start..end];
-            // should only ever be used for single byte slices in non-unicode mode
-            debug_assert_eq!(sliced.len(), 1);
-            Self::Bytes(sliced[0])
+            Self::Bytes(sliced)
         }
     }
 }
@@ -295,7 +293,7 @@ fn re_replace_impl(text: &str, reg_exp: &str, rep: &str, flags: &str) -> Result<
 
     // Replace returns a Cow, get it as &str and turn into a js string
     let rep_ser = ReplacdSer {
-        result: str::from_utf8(res_cow.as_ref())?,
+        result: &String::from_utf8_lossy(res_cow.as_ref()),
     };
     Ok(rep_ser.to_js_value())
 }
@@ -323,7 +321,7 @@ fn re_replace_list_impl(
     }
 
     let rep_ser = ReplacdSer {
-        result: str::from_utf8(&dest)?,
+        result: &String::from_utf8_lossy(&dest),
     };
 
     Ok(rep_ser.to_js_value())
@@ -453,6 +451,5 @@ pub fn debug_init() {
 }
 
 */
-
 #[cfg(test)]
 mod tests;
