@@ -395,9 +395,11 @@ fn utf16_index_bytes_slice(s: &str, mut indices: Vec<usize>) -> Vec<(usize, usiz
 
     // Iterate through every index we need matched
     while let Some(idxu8) = indices_iter.next() {
-        // Case 1: we are exactly at the end. Just push the current offset map
-        // and quit
+        // Case 1: we are exactly at the end. Just consume the char iterator,
+        // push the current offset map, and quit
         if idxu8 == s.len() {
+            // This is the idiomatic way to consume an iterator
+            char_iter.for_each(drop);
             ret.push((idxu8, total_u16_offset));
             break;
         }

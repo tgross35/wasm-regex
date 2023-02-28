@@ -50,8 +50,21 @@ fn test_u16_slice() {
     expected_vec.sort_by_key(|v| v.0);
     expected_vec.dedup();
 
-    let res = utf16_index_bytes_slice(TEST_S, input_vec);
+    let res = utf16_index_bytes_slice(TEST_S, input_vec.clone());
     assert_eq!(expected_vec, res);
+
+    test_byte_slice_sparse(TEST_S, &input_vec, &expected_vec);
+}
+
+#[test]
+fn test_u16_byte_slice_index_allemojis() {
+    let s = "😀😃😄";
+    let input = vec![0, 12];
+    let expected = vec![(0, 0), (12, 6)];
+    let map = utf16_index_bytes_slice(s, input.clone());
+    assert_eq!(expected, map);
+
+    test_byte_slice_sparse(s, &input, &expected);
 }
 
 // Test on non-utf8 boundaries
@@ -60,8 +73,10 @@ fn test_u16_slice_nonutf8_endemoji() {
     let s = "xx😀";
     let input: Vec<usize> = (0..=s.len()).collect();
     let expected = vec![(0, 0), (1, 1), (2, 2), (3, 4), (4, 4), (5, 4), (6, 4)];
-    let res = utf16_index_bytes_slice(s, input);
+    let res = utf16_index_bytes_slice(s, input.clone());
     assert_eq!(expected, res);
+
+    test_byte_slice_sparse(s, &input, &expected);
 }
 
 #[test]
@@ -79,8 +94,10 @@ fn test_u16_slice_nonutf8_enchar() {
         (7, 5),
         (8, 6),
     ];
-    let res = utf16_index_bytes_slice(s, input);
+    let res = utf16_index_bytes_slice(s, input.clone());
     assert_eq!(expected, res);
+
+    test_byte_slice_sparse(s, &input, &expected);
 }
 
 #[test]
@@ -88,17 +105,90 @@ fn test_u16_slice_nonutf8_startemoji() {
     let s = "😀xx";
     let input: Vec<usize> = (0..=s.len()).collect();
     let expected = vec![(0, 0), (1, 2), (2, 2), (3, 2), (4, 2), (5, 3), (6, 4)];
-    let res = utf16_index_bytes_slice(s, input);
+    let res = utf16_index_bytes_slice(s, input.clone());
     assert_eq!(expected, res);
+
+    test_byte_slice_sparse(s, &input, &expected);
 }
 
-// #[wasm_bindgen_test]
-// fn test_find_unicode() {
-//     let res = re_find("😃", ".", "");
-//     // dbg!(&res);
-//     assert_eq!(res, "1234: end");
-//     assert_eq!(res.as_string().unwrap(), "1234: end");
-// }
+/// Given an input vector and an expected vector, test first, last, and middle
+/// items separately. This helps fuzz errors with char counting
+fn test_byte_slice_sparse(s: &str, input: &[usize], expected: &[(usize, usize)]) {
+    let mut in_srt = Vec::from_iter(input.iter().copied());
+    let mut ex_srt = Vec::from_iter(expected.iter().copied());
+    in_srt.sort_unstable();
+    in_srt.dedup();
+    ex_srt.sort_by_key(|k| k.0);
+    ex_srt.dedup_by_key(|k| k.0);
+
+    let len = in_srt.len();
+    let to_test = [
+        (
+            vec![*in_srt.first().unwrap()],
+            vec![*ex_srt.first().unwrap()],
+        ),
+        (vec![*in_srt.last().unwrap()], vec![*ex_srt.last().unwrap()]),
+        (
+            vec![*in_srt.first().unwrap(), *in_srt.last().unwrap()],
+            vec![*ex_srt.first().unwrap(), *ex_srt.last().unwrap()],
+        ),
+        (vec![in_srt[len / 2]], vec![ex_srt[len / 2]]),
+    ];
+
+    for (in_t, ex_t) in to_test.into_iter() {
+        let fail_msg = format!(
+            "\nfailed at input: {input:?}\nexpected: {expected:?}\ntesting: ({in_t:?}, {ex_t:?})"
+        );
+        let res = utf16_index_bytes_slice(s, in_t);
+        assert_eq!(ex_t, res, "{}", fail_msg);
+    }
+}
+
+#[wasm_bindgen_test]
+fn test_find_unicode() {
+    let s = "😃";
+    let res = re_find(s, ".", "u");
+    let expected = MatchSer {
+        matches: vec![vec![CapSer {
+            group_name: None,
+            match_num: 0,
+            group_num: 0,
+            is_participating: true,
+            entire_match: true,
+            content: Some(Content::String(s)),
+            start_utf16: Some(0),
+            start: Some(0),
+            end_utf16: Some(2),
+            end: Some(4),
+        }]],
+    }
+    .to_js_value();
+
+    assert_eq!(JSON::stringify(&res), JSON::stringify(&expected));
+}
+
+#[wasm_bindgen_test]
+fn test_find_indices() {
+    let s = "😀😃😄";
+    let res = re_find(s, ".*", "u");
+    let expected = MatchSer {
+        matches: vec![vec![CapSer {
+            group_name: None,
+            match_num: 0,
+            group_num: 0,
+            is_participating: true,
+            entire_match: true,
+            content: Some(Content::String(s)),
+            start_utf16: Some(0),
+            start: Some(0),
+            end_utf16: Some(6),
+            end: Some(12),
+        }]],
+    }
+    .to_js_value();
+
+    assert_eq!(JSON::stringify(&res), JSON::stringify(&expected));
+}
 
 #[wasm_bindgen_test]
 fn test_replace() {
