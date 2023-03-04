@@ -4,7 +4,10 @@ mod error;
 use error::Error;
 use regex::bytes::{Regex, RegexBuilder};
 use serde::Serialize;
+use std::borrow::Cow;
+use std::fmt::Write;
 use std::str;
+
 use wasm_bindgen::prelude::*;
 
 /// Quick macro to print to the console for debugging
@@ -102,7 +105,7 @@ struct CapSer<'a> {
 
     /* below fields only exist if is_participating */
     /// Content of the capture group
-    content: Option<Content<'a>>,
+    content: Option<Cow<'a, str>>,
     /// Start index in the original string
     start_utf16: Option<usize>,
     /// Start index as a utf8 array
@@ -113,24 +116,53 @@ struct CapSer<'a> {
     end: Option<usize>,
 }
 
-/// Our content is usually a string, but will be a byte slice if invalid utf8
-#[derive(Debug, Serialize)]
-#[serde(untagged)]
-enum Content<'a> {
-    String(&'a str),
-    Bytes(&'a [u8]),
-}
+/// Return a sliced string if valid UTF8. Otherwise, replace invalid unicode with an escape
+/// sequence (e.g. "this part is valid \x1f but that wasn't")
+fn str_from_utf8_rep(text: &str, start: usize, end: usize) -> Cow<str> {
+    let mut bslice = &text.as_bytes()[start..end];
+    let mut utf8_res = str::from_utf8(bslice);
 
-impl<'a> Content<'a> {
-    /// Return a sliced string if possible, byte array if not
-    fn from_slice(text: &'a str, start: usize, end: usize) -> Self {
-        if let Some(v) = text.get(start..end) {
-            Self::String(v)
-        } else {
-            let sliced = &text.as_bytes()[start..end];
-            Self::Bytes(sliced)
-        }
+    // Short circuit: entire slice is valid UTF8
+    if let Ok(s) = utf8_res {
+        return Cow::Borrowed(s);
     }
+
+    let mut ret = String::new();
+    let mut is_first_loop = true;
+
+    loop {
+        if is_first_loop {
+            // use existing result
+            is_first_loop = false;
+        } else {
+            utf8_res = str::from_utf8(bslice);
+        }
+
+        // Exit if our entire string is valid
+        if let Ok(s) = utf8_res {
+            ret.push_str(s);
+            break;
+        }
+
+        // At this point we have a utf8 error. So:
+        // 1. Push the valid portion of the string
+        let loop_err = utf8_res.unwrap_err();
+        let valid_end = loop_err.valid_up_to();
+        let err_len_res = loop_err.error_len();
+        ret.push_str(str::from_utf8(&bslice[..valid_end]).unwrap());
+        bslice = &bslice[valid_end..];
+
+        // 2. Push all invalid bytes formatted as "\xff"
+        let invalid_end = valid_end + err_len_res.unwrap_or(bslice.len() - 1);
+        for byte in &bslice[..invalid_end] {
+            write!(ret, "\\x{byte:02x}").unwrap();
+        }
+
+        // 3. Update our remaining slice for the next loop
+        bslice = &bslice[invalid_end..];
+    }
+
+    Cow::Owned(ret)
 }
 
 /// Our regex state with compiled regex and global flag
@@ -247,7 +279,7 @@ fn re_find_impl(text: &str, reg_exp: &str, flags: &str) -> Result<JsValue, Error
 
             // If our capture exists, update info for it
             if let Some(m) = cap_match.get(i) {
-                let content = Content::from_slice(text, m.start(), m.end());
+                let content = str_from_utf8_rep(text, m.start(), m.end());
 
                 all_indices.push(m.start());
                 all_indices.push(m.end());

@@ -1,5 +1,7 @@
 use js_sys::JSON;
-use wasm_bindgen_test::*;
+use pretty_assertions::assert_eq;
+use std::borrow::Cow;
+use wasm_bindgen_test::*; // color output for our tests
 
 // tests marked wasm_bindgen_test must be run with `wasm-pack test --node` (not `cargo test`)
 use super::*;
@@ -111,6 +113,145 @@ fn test_u16_slice_nonutf8_startemoji() {
     test_byte_slice_sparse(s, &input, &expected);
 }
 
+#[test]
+fn test_str_utf8_replace() {
+    let s = "a😀b";
+    let expected: &[(usize, usize, &str)] = &[
+        (0, 1, "a"),
+        (0, 3, "a\\xf0\\x9f"),
+        (1, 4, "\\xf0\\x9f\\x98"),
+        (2, 3, "\\x9f"),
+    ];
+
+    for (start, end, res) in expected.iter() {
+        assert_eq!(
+            &str_from_utf8_rep(s, *start, *end).as_ref(),
+            res,
+            "failed at {start}..{end}"
+        );
+    }
+}
+
+#[wasm_bindgen_test]
+fn test_find_unicode() {
+    let s = "😃";
+    let res = re_find(s, ".", "u");
+    let expected = MatchSer {
+        matches: vec![vec![CapSer {
+            group_name: None,
+            match_num: 0,
+            group_num: 0,
+            is_participating: true,
+            entire_match: true,
+            content: Some(Cow::Borrowed(s)),
+            start_utf16: Some(0),
+            start: Some(0),
+            end_utf16: Some(2),
+            end: Some(4),
+        }]],
+    }
+    .to_js_value();
+
+    assert_eq!(stringify(&res), stringify(&expected));
+}
+
+#[wasm_bindgen_test]
+fn test_find_indices() {
+    let s = "😀😃😄";
+    let res = re_find(s, ".*", "u");
+    let expected = MatchSer {
+        matches: vec![vec![CapSer {
+            group_name: None,
+            match_num: 0,
+            group_num: 0,
+            is_participating: true,
+            entire_match: true,
+            content: Some(Cow::Borrowed(s)),
+            start_utf16: Some(0),
+            start: Some(0),
+            end_utf16: Some(6),
+            end: Some(12),
+        }]],
+    }
+    .to_js_value();
+
+    assert_eq!(stringify(&res), stringify(&expected));
+}
+
+#[wasm_bindgen_test]
+fn test_find_invalid_utf8() {
+    // test without unicode flag
+    let s = "a😀a";
+    let res = re_find(s, "..", "g");
+    let expected = MatchSer {
+        matches: vec![
+            vec![CapSer {
+                group_name: None,
+                match_num: 0,
+                group_num: 0,
+                is_participating: true,
+                entire_match: true,
+                content: Some(Cow::Borrowed(r"a\xf0")),
+                start_utf16: Some(0),
+                start: Some(0),
+                end_utf16: Some(3),
+                end: Some(2),
+            }],
+            vec![CapSer {
+                group_name: None,
+                match_num: 1,
+                group_num: 0,
+                is_participating: true,
+                entire_match: true,
+                content: Some(Cow::Borrowed(r"\x9f\x98")),
+                start_utf16: Some(3),
+                start: Some(2),
+                end_utf16: Some(3),
+                end: Some(4),
+            }],
+            vec![CapSer {
+                group_name: None,
+                match_num: 2,
+                group_num: 0,
+                is_participating: true,
+                entire_match: true,
+                content: Some(Cow::Borrowed(r"\x80a")),
+                start_utf16: Some(3),
+                start: Some(4),
+                end_utf16: Some(4),
+                end: Some(6),
+            }],
+        ],
+    }
+    .to_js_value();
+
+    assert_eq!(stringify(&res), stringify(&expected));
+}
+
+#[wasm_bindgen_test]
+fn test_replace() {
+    let res = re_replace("test 1234 end", r#"test (?P<cap>\d+)\s?"#, "$cap: ", "");
+    let expected = ReplacdSer {
+        result: "1234: end",
+    }
+    .to_js_value();
+
+    assert_eq!(stringify(&res), stringify(&expected));
+}
+
+#[wasm_bindgen_test]
+fn test_replace_list() {
+    let res = re_replace_list("foo bar!", r#"\w+"#, "$0\n", "g");
+    let expected = ReplacdSer {
+        result: "foo\nbar\n",
+    }
+    .to_js_value();
+
+    assert_eq!(stringify(&res), stringify(&expected));
+}
+
+/* helpers */
+
 /// Given an input vector and an expected vector, test first, last, and middle
 /// items separately. This helps fuzz errors with char counting
 fn test_byte_slice_sparse(s: &str, input: &[usize], expected: &[(usize, usize)]) {
@@ -144,70 +285,11 @@ fn test_byte_slice_sparse(s: &str, input: &[usize], expected: &[(usize, usize)])
     }
 }
 
-#[wasm_bindgen_test]
-fn test_find_unicode() {
-    let s = "😃";
-    let res = re_find(s, ".", "u");
-    let expected = MatchSer {
-        matches: vec![vec![CapSer {
-            group_name: None,
-            match_num: 0,
-            group_num: 0,
-            is_participating: true,
-            entire_match: true,
-            content: Some(Content::String(s)),
-            start_utf16: Some(0),
-            start: Some(0),
-            end_utf16: Some(2),
-            end: Some(4),
-        }]],
-    }
-    .to_js_value();
-
-    assert_eq!(JSON::stringify(&res), JSON::stringify(&expected));
-}
-
-#[wasm_bindgen_test]
-fn test_find_indices() {
-    let s = "😀😃😄";
-    let res = re_find(s, ".*", "u");
-    let expected = MatchSer {
-        matches: vec![vec![CapSer {
-            group_name: None,
-            match_num: 0,
-            group_num: 0,
-            is_participating: true,
-            entire_match: true,
-            content: Some(Content::String(s)),
-            start_utf16: Some(0),
-            start: Some(0),
-            end_utf16: Some(6),
-            end: Some(12),
-        }]],
-    }
-    .to_js_value();
-
-    assert_eq!(JSON::stringify(&res), JSON::stringify(&expected));
-}
-
-#[wasm_bindgen_test]
-fn test_replace() {
-    let res = re_replace("test 1234 end", r#"test (?P<cap>\d+)\s?"#, "$cap: ", "");
-    let expected = ReplacdSer {
-        result: "1234: end",
-    }
-    .to_js_value();
-
-    assert_eq!(JSON::stringify(&res), JSON::stringify(&expected));
-}
-
-#[wasm_bindgen_test]
-fn test_replace_list() {
-    let res = re_replace_list("foo bar!", r#"\w+"#, "$0\n", "g");
-    let expected = ReplacdSer {
-        result: "foo\nbar\n",
-    }
-    .to_js_value();
-
-    assert_eq!(JSON::stringify(&res), JSON::stringify(&expected));
+// wrap JSON::stringify but use pretty printinf
+fn stringify(obj: &JsValue) -> String {
+    JSON::stringify_with_replacer_and_space(obj, &JsValue::NULL, &2.into())
+        .unwrap()
+        .as_string()
+        .unwrap()
+        .replace("\\n", "\n")
 }
