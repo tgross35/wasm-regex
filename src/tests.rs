@@ -1,6 +1,7 @@
+use std::borrow::Cow;
+
 use js_sys::JSON;
 use pretty_assertions::assert_eq;
-use std::borrow::Cow;
 use wasm_bindgen_test::*; // color output for our tests
 
 // tests marked wasm_bindgen_test must be run with `wasm-pack test --node` (not `cargo test`)

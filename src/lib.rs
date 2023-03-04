@@ -1,13 +1,13 @@
 //! Simple regex utility available via WASM
 
 mod error;
-use error::Error;
-use regex::bytes::{Regex, RegexBuilder};
-use serde::Serialize;
 use std::borrow::Cow;
 use std::fmt::Write;
 use std::str;
 
+use error::Error;
+use regex::bytes::{Regex, RegexBuilder};
+use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
 /// Quick macro to print to the console for debugging
@@ -326,6 +326,7 @@ fn re_replace_impl(text: &str, reg_exp: &str, rep: &str, flags: &str) -> Result<
     };
 
     // Replace returns a Cow, get it as &str and turn into a js string
+    // Invalid unicode is replaced with the invalid unicode character
     let rep_ser = ReplacdSer {
         result: &String::from_utf8_lossy(res_cow.as_ref()),
     };
@@ -354,6 +355,7 @@ fn re_replace_list_impl(
         cap_match.expand(rep.as_bytes(), &mut dest);
     }
 
+    // Return a valid utf8 string that uses the replacement character where needed
     let rep_ser = ReplacdSer {
         result: &String::from_utf8_lossy(&dest),
     };

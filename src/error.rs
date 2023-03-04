@@ -1,10 +1,11 @@
 //! All the messy-ish error handling code
 
-use crate::utf16_index_bytes;
-use crate::utf16_index_chars;
+use std::str;
+
 use regex_syntax::ast::Span as ReSpan;
 use serde::Serialize;
-use std::str;
+
+use crate::{utf16_index_bytes, utf16_index_chars};
 
 /// Wrapper so we can serialize regex errors
 #[derive(Debug, Serialize)]
