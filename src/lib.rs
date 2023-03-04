@@ -124,6 +124,7 @@ fn str_from_utf8_rep(text: &str, start: usize, end: usize) -> Cow<str> {
 
     // Short circuit: entire slice is valid UTF8
     if let Ok(s) = utf8_res {
+        console!("valid string");
         return Cow::Borrowed(s);
     }
 
@@ -149,11 +150,12 @@ fn str_from_utf8_rep(text: &str, start: usize, end: usize) -> Cow<str> {
         let loop_err = utf8_res.unwrap_err();
         let valid_end = loop_err.valid_up_to();
         let err_len_res = loop_err.error_len();
+        // This could be unsafe from_utf8_unchecked but we'll let the optimizer handle it
         ret.push_str(str::from_utf8(&bslice[..valid_end]).unwrap());
         bslice = &bslice[valid_end..];
 
         // 2. Push all invalid bytes formatted as "\xff"
-        let invalid_end = valid_end + err_len_res.unwrap_or(bslice.len() - 1);
+        let invalid_end = err_len_res.map_or(bslice.len(), |elen| elen + valid_end);
         for byte in &bslice[..invalid_end] {
             write!(ret, "\\x{byte:02x}").unwrap();
         }

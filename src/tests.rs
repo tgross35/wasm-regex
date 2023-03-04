@@ -115,20 +115,21 @@ fn test_u16_slice_nonutf8_startemoji() {
 
 #[test]
 fn test_str_utf8_replace() {
-    let s = "a😀b";
-    let expected: &[(usize, usize, &str)] = &[
-        (0, 1, "a"),
-        (0, 3, "a\\xf0\\x9f"),
-        (1, 4, "\\xf0\\x9f\\x98"),
-        (2, 3, "\\x9f"),
+    let s1 = "a😀b";
+    let s2 = "😀";
+    let expected: &[(usize, usize, &str, &str)] = &[
+        (0, 1, s1, "a"),
+        (0, 3, s1, r"a\xf0\x9f"),
+        (1, 4, s1, r"\xf0\x9f\x98"),
+        (2, 3, s1, r"\x9f"),
+        (0, 1, s2, r"\xf0"),
+        (0, 4, s2, r"😀"),
+        (3, 4, s2, r"\x80"),
     ];
 
-    for (start, end, res) in expected.iter() {
-        assert_eq!(
-            &str_from_utf8_rep(s, *start, *end).as_ref(),
-            res,
-            "failed at {start}..{end}"
-        );
+    for (start, end, test_str, res) in expected.iter() {
+        eprintln!("testing \"{test_str}\"[{start}..{end}]");
+        assert_eq!(&str_from_utf8_rep(test_str, *start, *end).as_ref(), res);
     }
 }
 
