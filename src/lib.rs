@@ -124,7 +124,6 @@ fn str_from_utf8_rep(text: &str, start: usize, end: usize) -> Cow<str> {
 
     // Short circuit: entire slice is valid UTF8
     if let Ok(s) = utf8_res {
-        console!("valid string");
         return Cow::Borrowed(s);
     }
 
@@ -157,7 +156,7 @@ fn str_from_utf8_rep(text: &str, start: usize, end: usize) -> Cow<str> {
         // 2. Push all invalid bytes formatted as "\xff"
         let invalid_end = err_len_res.map_or(bslice.len(), |elen| elen + valid_end);
         for byte in &bslice[..invalid_end] {
-            write!(ret, "\\x{byte:02x}").unwrap();
+            write!(ret, r"\x{byte:02x}").unwrap();
         }
 
         // 3. Update our remaining slice for the next loop
