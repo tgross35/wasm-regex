@@ -1,4 +1,21 @@
 <!DOCTYPE html>
+<style>
+    html {
+        background-color: #222;
+        color: white;
+    }
+
+    textarea,
+    input {
+        background-color: #444;
+        color: white;
+        border: 0px;
+    }
+
+    .sel-lab {
+        padding-left: 4px;
+    }
+</style>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -34,6 +51,36 @@
     <button onclick="reFind()">Find match</button>
     <button onclick="reReplace()">Replace</button>
     <button onclick="reReplaceList()">Replace List</button>
+    <label class="sel-lab">Input sep:</label>
+    <select id="textSep">
+        <option value="ignore">ignore</option>
+        <option value="str">""</option>
+        <option value="raw">r""</option>
+        <option value="rawhash1">r#""#</option>
+        <option value="rawhash2">r##""##</option>
+        <option value="rawhash3">r###""###</option>
+        <option value="rawhash4">r####""####</option>
+    </select>
+    <label class="sel-lab">RE sep:</label>
+    <select id="regExpSep">
+        <option value="ignore">ignore</option>
+        <option value="str">""</option>
+        <option value="raw">r""</option>
+        <option value="rawhash1">r#""#</option>
+        <option value="rawhash2">r##""##</option>
+        <option value="rawhash3">r###""###</option>
+        <option value="rawhash4">r####""####</option>
+    </select>
+    <label class="sel-lab">Replace sep:</label>
+    <select id="repSep">
+        <option value="ignore">ignore</option>
+        <option value="str">""</option>
+        <option value="raw">r""</option>
+        <option value="rawhash1">r#""#</option>
+        <option value="rawhash2">r##""##</option>
+        <option value="rawhash3">r###""###</option>
+        <option value="rawhash4">r####""####</option>
+    </select>
     <p>
         <strong>Input len: </strong><span id="input_len">0</span>
         <strong>Operation time (ms): </strong><span id="operation_time">0</span>

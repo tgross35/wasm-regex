@@ -10,6 +10,8 @@ with `cargo install wasm-pack`.
 
 Next, inside the main folder, run `wasm-pack build` (add `--release` for full optimization).
 
+Add the flag `--featurues js-console` to enable printing to the console, for debugging
+
 To build an even smaller wasm file (for releases), use:
 `wasm-pack build --release --no-typescript --features none -Z build-std=panic_abort,std -Z build-std-features=panic_immediate_abort`.
 
@@ -20,7 +22,28 @@ Finally, run `npm run serve` to get the site up and going locally.
 
 ## API
 
-All indices are converted to their UTF16 equivalent.
+Function signatures:
+
+```js
+function re_find(
+    text: string, reg_exp: string, flags: string,
+    text_sep?: string, reg_exp_sep?: string): string;
+
+function re_replace(
+    text: string, reg_exp: string, rep: string, flags: string,
+    text_sep?: string, reg_exp_sep?: string, rep_sep?: string): string;
+
+function re_replace_list(
+    text: string, reg_exp: string, rep: string, flags: string,
+    text_sep?: string, reg_exp_sep?: string, rep_sep?: string): string;
+```
+
+The `_sep` parameters are optional and indicate how this library should parse
+the string. Options are `ignore`, `str`, `raw`, `rawhash1`, `rawhash2`,
+`rawhash3`, or `rawhash4`, to parse like the contents of `foo`, `"foo"`,
+`r"foo"`, `r#"foo"#`, `r##"foo"##`, `r###"foo"###`, `r####"foo"####`,
+respectively (quotes shouldn't be included). If unspecified, this defaults to
+`ignore`, which does no extra escaping.
 
 Result of `re_find`:
 
@@ -64,14 +87,35 @@ Result of `re_find`:
 
 Result of `re_replace` is just a string with all replacements applied. Result of
 `re_replace_list` is a string with replacements applied to each match, without
-any non-matching characters. Both use this schema:
-
-
+any non-matching characters.
 
 ### Error result
 
 Error results have two keys: `error_class` indicating the type of error, and
 `error` giving the contents.
+
+`unescape` errors happen when there is an issue quoting a given string.
+
+```json5
+{
+    "errorClass": "unescape",
+    "error": {
+        "kind": "Pattern",
+        "message": "pattern '\"#' may not be contained in r#\" strings",
+        "span": {
+            "start": { "offset": 0, "line": 1, "column": 0 },
+            "end": { "offset": 2, "line": 2, "column": 2 }
+        },
+        "span_utf16": {
+            "start": { "offset": 0, "line": 1, "column": 0 },
+            "end": { "offset": 2, "line": 2, "column": 2 }
+        },
+        // "text", "reg_exp", or "rep" based on which field caused the error
+        "source": "text"
+    }
+}
+```
+
 
 `regexSyntax` is the main error type, which is an error with the given syntax.
 It can be tested with something like the regex query `)`.
@@ -89,29 +133,13 @@ It can be tested with something like the regex query `)`.
         // Location of the error in the pattern in utf8, this is just for
         // debugging purposes
         "span": {
-            "start": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-            },
-            "end": {
-                "offset": 1,
-                "line": 1,
-                "column": 2
-            }
+            "start": { "offset": 0, "line": 1, "column": 1 },
+            "end": { "offset": 1, "line": 1, "column": 2 }
         },
         // Use this span to indicate position on the JS side
         "span_utf16": {
-            "start": {
-                "offset": 0,
-                "line": 1,
-                "column": 1
-            },
-            "end": {
-                "offset": 1,
-                "line": 1,
-                "column": 2
-            }
+            "start": { "offset": 0, "line": 1, "column": 1 },
+            "end": { "offset": 1, "line": 1, "column": 2 }
         }
     }
 }
