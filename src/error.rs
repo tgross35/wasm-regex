@@ -256,6 +256,8 @@ fn convert_re_spans(s: &str, span: &ReSpan) -> (Span, Span) {
 pub struct Unescape {
     /// Debug representation of the syntax error type,
     pub message: String,
+    /// Identifier for the error kind
+    pub kind: String,
     /// Location of the error
     pub span: Span,
     /// Location of the error with js offsets
@@ -270,6 +272,7 @@ impl Unescape {
         let (span, span_utf16) = Span::from_offsets(s, idx..(idx + pat.len()));
         Self {
             message: format!("pattern '{pat}' may not be contained in {type_} strings"),
+            kind: "Pattern".to_owned(),
             span,
             span_utf16,
             source: None,
@@ -317,6 +320,7 @@ impl From<(&str, Range<usize>, EscapeError)> for Unescape {
         let message = escape_error_message(&err);
         Self {
             message,
+            kind: format!("{err:?}"),
             span,
             span_utf16,
             source: None,

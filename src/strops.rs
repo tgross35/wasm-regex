@@ -171,10 +171,10 @@ impl Display for StrType {
             StrType::Ignore => write!(f, "unescaped"),
             StrType::Str => write!(f, "standard"),
             StrType::RawStr => write!(f, "raw"),
-            StrType::RawStrHash1 => write!(f, "r#"),
-            StrType::RawStrHash2 => write!(f, "r##"),
-            StrType::RawStrHash3 => write!(f, "r###"),
-            StrType::RawStrHash4 => write!(f, "r####"),
+            StrType::RawStrHash1 => write!(f, "r#\""),
+            StrType::RawStrHash2 => write!(f, "r##\""),
+            StrType::RawStrHash3 => write!(f, "r###\""),
+            StrType::RawStrHash4 => write!(f, "r####\""),
         }
     }
 }
@@ -230,6 +230,7 @@ fn check_unescaped_quotes(s: &str) -> Result<(), Box<Unescape>> {
     let (span, span_utf16) = Span::from_offsets(s, bad_range);
     let err = Unescape {
         message: String::from(r#"unescaped '"' in string"#),
+        kind: "UnescapedQuote".to_owned(),
         span,
         span_utf16,
         source: None,
@@ -263,7 +264,7 @@ fn unescape_impl(s: &str, sep: StrType) -> Result<Cow<str>, Box<Unescape>> {
     }
 
     // no need for special behavior if we don't have any escapes
-    if !matches!(sep, StrType::Str) || !s.contains('\\') {
+    if !matches!(sep, StrType::Str) || !s.contains(['\\', '"']) {
         return Ok(Cow::Borrowed(s));
     }
 
@@ -311,6 +312,7 @@ mod tests {
         assert_eq!(err.span_utf16.start.offset, 3);
         assert_eq!(err.span_utf16.end.offset, 5);
         assert_eq!(unescape_impl(r"a\nb", StrType::Str).unwrap(), "a\nb");
+        assert!(unescape_impl(r#"""#, StrType::Str).is_err());
     }
 
     #[test]
@@ -321,12 +323,12 @@ mod tests {
         assert!(check_unescaped_quotes(r#"\"ab\"cd\""#).is_ok());
         assert!(check_unescaped_quotes(r#"ab\\cd"#).is_ok());
         assert!(check_unescaped_quotes(r#"ab\\\"cd"#).is_ok());
+        assert!(check_unescaped_quotes(r#"""#).is_err());
         assert!(check_unescaped_quotes(r#"ab"cd"#).is_err());
         assert!(check_unescaped_quotes(r#""abcd"#).is_err());
         assert!(check_unescaped_quotes(r#"abcd""#).is_err());
         assert!(check_unescaped_quotes(r#"ab\\"cd"#).is_err());
         assert!(check_unescaped_quotes(r#"ab\\\\"cd"#).is_err());
-        assert!(check_unescaped_quotes(r#"""#).is_err());
         let test_sp = check_unescaped_quotes(r#"ab"cd"#).unwrap_err();
         assert_eq!(test_sp.span.start.offset, 2);
         assert_eq!(test_sp.span.end.offset, 3);
