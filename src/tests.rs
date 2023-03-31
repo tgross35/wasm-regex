@@ -2,10 +2,11 @@ use std::borrow::Cow;
 
 use js_sys::JSON;
 use pretty_assertions::assert_eq;
-use wasm_bindgen_test::*; // color output for our tests
+use wasm_bindgen_test::*;
 
 // tests marked wasm_bindgen_test must be run with `wasm-pack test --node` (not `cargo test`)
 use super::*;
+use crate::strops::utf16_index_bytes;
 
 /// UTF8 test string
 const TEST_S: &str = "x😀🤣a🤩😛🏴‍☠️🤑";
@@ -137,7 +138,7 @@ fn test_str_utf8_replace() {
 #[wasm_bindgen_test]
 fn test_find_unicode() {
     let s = "😃";
-    let res = re_find(s, ".", "u");
+    let res = re_find(s, ".", "u", None, None);
     let expected = MatchSer {
         matches: vec![vec![CapSer {
             group_name: None,
@@ -160,7 +161,7 @@ fn test_find_unicode() {
 #[wasm_bindgen_test]
 fn test_find_indices() {
     let s = "😀😃😄";
-    let res = re_find(s, ".*", "u");
+    let res = re_find(s, ".*", "u", None, None);
     let expected = MatchSer {
         matches: vec![vec![CapSer {
             group_name: None,
@@ -184,7 +185,7 @@ fn test_find_indices() {
 fn test_find_invalid_utf8() {
     // test without unicode flag
     let s = "a😀a";
-    let res = re_find(s, "..", "g");
+    let res = re_find(s, "..", "g", None, None);
     let expected = MatchSer {
         matches: vec![
             vec![CapSer {
@@ -232,7 +233,15 @@ fn test_find_invalid_utf8() {
 
 #[wasm_bindgen_test]
 fn test_replace() {
-    let res = re_replace("test 1234 end", r#"test (?P<cap>\d+)\s?"#, "$cap: ", "");
+    let res = re_replace(
+        "test 1234 end",
+        r#"test (?P<cap>\d+)\s?"#,
+        "$cap: ",
+        "",
+        None,
+        None,
+        None,
+    );
     let expected = ReplacdSer {
         result: "1234: end",
     }
@@ -243,7 +252,7 @@ fn test_replace() {
 
 #[wasm_bindgen_test]
 fn test_replace_list() {
-    let res = re_replace_list("foo bar!", r#"\w+"#, "$0\n", "g");
+    let res = re_replace_list("foo bar!", r#"\w+"#, "$0\n", "g", None, None, None);
     let expected = ReplacdSer {
         result: "foo\nbar\n",
     }
@@ -257,8 +266,8 @@ fn test_replace_list() {
 /// Given an input vector and an expected vector, test first, last, and middle
 /// items separately. This helps fuzz errors with char counting
 fn test_byte_slice_sparse(s: &str, input: &[usize], expected: &[(usize, usize)]) {
-    let mut in_srt = Vec::from_iter(input.iter().copied());
-    let mut ex_srt = Vec::from_iter(expected.iter().copied());
+    let mut in_srt: Vec<_> = input.to_vec();
+    let mut ex_srt: Vec<_> = expected.to_vec();
     in_srt.sort_unstable();
     in_srt.dedup();
     ex_srt.sort_by_key(|k| k.0);
@@ -278,7 +287,7 @@ fn test_byte_slice_sparse(s: &str, input: &[usize], expected: &[(usize, usize)])
         (vec![in_srt[len / 2]], vec![ex_srt[len / 2]]),
     ];
 
-    for (in_t, ex_t) in to_test.into_iter() {
+    for (in_t, ex_t) in to_test {
         let fail_msg = format!(
             "\nfailed at input: {input:?}\nexpected: {expected:?}\ntesting: ({in_t:?}, {ex_t:?})"
         );
